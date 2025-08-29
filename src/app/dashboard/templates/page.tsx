@@ -48,6 +48,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
 import { buildApiUrl } from "@/lib/api"
+import { getAuthHeaders } from "@/lib/auth"
 
 interface ProductTemplate {
   id: string
@@ -199,9 +200,7 @@ export default function TemplatesPage() {
       })
 
       const response = await fetch(buildApiUrl(`/templates?${params}`), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -230,10 +229,7 @@ export default function TemplatesPage() {
     try {
       const response = await fetch(buildApiUrl("/templates"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer dev-mock-token",
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(formData),
       })
 
@@ -265,10 +261,7 @@ export default function TemplatesPage() {
         buildApiUrl(`/templates/${editingTemplate.id}`),
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer dev-mock-token",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify(formData),
         }
       )
@@ -300,9 +293,7 @@ export default function TemplatesPage() {
         buildApiUrl(`/templates/${deletingTemplate.id}`),
         {
           method: "DELETE",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-          },
+          headers: getAuthHeaders(),
         }
       )
 
@@ -335,10 +326,7 @@ export default function TemplatesPage() {
         buildApiUrl(`/templates/${copyingTemplate.id}/copy`),
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer dev-mock-token",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ name: copyName }),
         }
       )
@@ -367,9 +355,7 @@ export default function TemplatesPage() {
         buildApiUrl(`/templates/${template.id}/default`),
         {
           method: "PATCH",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-          },
+          headers: getAuthHeaders(),
         }
       )
 

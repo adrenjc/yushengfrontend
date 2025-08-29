@@ -44,6 +44,7 @@ import { FileUpload } from "@/components/ui/file-upload"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
 import { buildApiUrl, API_ROUTES } from "@/lib/api"
+import { getAuthHeaders } from "@/lib/auth"
 
 interface ProductTemplate {
   id: string
@@ -184,9 +185,7 @@ export default function MatchingPage() {
     try {
       setTemplatesLoading(true)
       const response = await fetch(buildApiUrl(API_ROUTES.TEMPLATES.OPTIONS), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -217,10 +216,7 @@ export default function MatchingPage() {
     try {
       setLoading(true)
       const response = await fetch(buildApiUrl("/matching/tasks"), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -260,9 +256,7 @@ export default function MatchingPage() {
 
       const response = await fetch(buildApiUrl("/matching/tasks"), {
         method: "POST",
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-        },
+        headers: getAuthHeaders(),
         body: formData,
       })
 
@@ -299,10 +293,7 @@ export default function MatchingPage() {
         buildApiUrl(`/matching/tasks/${taskId}/execute`),
         {
           method: "POST",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
         }
       )
 
@@ -378,10 +369,7 @@ export default function MatchingPage() {
     try {
       const response = await fetch(buildApiUrl(`/matching/tasks/${taskId}`), {
         method: "DELETE",
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -407,10 +395,7 @@ export default function MatchingPage() {
         buildApiUrl(`/matching/tasks/${taskId}/status`),
         {
           method: "PATCH",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
         }
       )
 
@@ -582,7 +567,7 @@ export default function MatchingPage() {
         try {
           // 静默获取最新数据，不显示加载状态
           const response = await fetch(buildApiUrl("/matching/tasks"), {
-            headers: { Authorization: "Bearer dev-mock-token" },
+            headers: getAuthHeaders(),
           })
 
           if (response.ok) {

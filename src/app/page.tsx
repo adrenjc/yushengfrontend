@@ -43,21 +43,24 @@ export default function HomePage() {
         updatedAt: new Date().toISOString(),
       }
 
-      // 直接设置用户状态，跳过登录
-      setUser(mockUser)
-      useAuthStore.setState({
-        token: "dev-mock-token",
-        refreshToken: "dev-mock-refresh-token",
-        isAuthenticated: true,
-      })
+      // 只在开发环境下直接设置用户状态，跳过登录
+      if (process.env.NODE_ENV === "development") {
+        setUser(mockUser)
+        useAuthStore.setState({
+          token: "dev-mock-token",
+          refreshToken: "dev-mock-refresh-token",
+          isAuthenticated: true,
+        })
 
-      // 将开发模式token持久化到本地存储，便于前端API请求携带
-      if (typeof window !== "undefined") {
-        localStorage.setItem(STORAGE_KEYS.TOKEN, "dev-mock-token")
-        localStorage.setItem(
-          STORAGE_KEYS.REFRESH_TOKEN,
-          "dev-mock-refresh-token"
-        )
+        // 将开发模式token持久化到本地存储，便于前端API请求携带
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEYS.TOKEN, "dev-mock-token")
+          localStorage.setItem(
+            STORAGE_KEYS.REFRESH_TOKEN,
+            "dev-mock-refresh-token"
+          )
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(mockUser))
+        }
       }
 
       console.log("开发模式登录状态设置完成，准备跳转")

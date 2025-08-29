@@ -50,6 +50,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
 import { buildApiUrl } from "@/lib/api"
+import { getAuthHeaders } from "@/lib/auth"
 import BatchEditModal from "./batch-edit-modal"
 
 interface MatchingResult {
@@ -207,10 +208,7 @@ function MatchingResultsPageContent() {
       const taskResponse = await fetch(
         buildApiUrl(`/matching/tasks/${taskId}`),
         {
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
         }
       )
 
@@ -225,10 +223,7 @@ function MatchingResultsPageContent() {
       url.searchParams.set("limit", "1000") // 获取所有记录
 
       const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -264,9 +259,7 @@ function MatchingResultsPageContent() {
         buildApiUrl(`/matching/tasks/${taskId}/export?format=${format}`),
         {
           method: "GET",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-          },
+          headers: getAuthHeaders(),
         }
       )
 
@@ -332,10 +325,7 @@ function MatchingResultsPageContent() {
         console.log(`🚀 获取第${currentPage}页商品 URL:`, url)
 
         const response = await fetch(url, {
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
         })
 
         console.log(`📡 第${currentPage}页响应状态:`, response.status)
@@ -419,10 +409,7 @@ function MatchingResultsPageContent() {
         buildApiUrl(`/matching/records/${editingRecord._id}/review`),
         {
           method: "POST",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             action: "confirm",
             productId,
@@ -546,10 +533,7 @@ function MatchingResultsPageContent() {
         buildApiUrl(`/matching/records/${recordId}/original-name`),
         {
           method: "PATCH",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             originalName: tempOriginalName.trim(),
           }),
@@ -589,10 +573,7 @@ function MatchingResultsPageContent() {
             buildApiUrl(`/matching/records/${recordId}/review`),
             {
               method: "POST",
-              headers: {
-                Authorization: "Bearer dev-mock-token",
-                "Content-Type": "application/json",
-              },
+              headers: getAuthHeaders(),
               body: JSON.stringify({
                 action: "confirm",
                 productId,

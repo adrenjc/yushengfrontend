@@ -67,6 +67,7 @@ const EmptyState = dynamic(
   }
 )
 import { useNotifications } from "@/stores/app"
+import { getAuthHeaders } from "@/lib/auth"
 import {
   API_ROUTES,
   buildApiUrl,
@@ -345,9 +346,7 @@ export default function ProductsPage() {
     try {
       setTemplatesLoading(true)
       const response = await fetch(buildApiUrl(API_ROUTES.TEMPLATES.OPTIONS), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -398,10 +397,7 @@ export default function ProductsPage() {
       console.log(`🔗 请求URL: ${url.toString()}`)
 
       const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -438,9 +434,7 @@ export default function ProductsPage() {
         buildApiUrl(API_ROUTES.PRODUCTS.DELETE(id)),
         {
           method: "DELETE",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-          },
+          headers: getAuthHeaders(),
         }
       )
 
@@ -470,10 +464,7 @@ export default function ProductsPage() {
         buildApiUrl(API_ROUTES.PRODUCTS.HARD_DELETE),
         {
           method: "POST",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ ids }),
         }
       )
@@ -506,10 +497,7 @@ export default function ProductsPage() {
       const ids = Array.from(selectedKeys)
       const response = await fetch(buildApiUrl(API_ROUTES.PRODUCTS.BATCH), {
         method: "POST",
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ ids, action }),
       })
 
@@ -548,10 +536,7 @@ export default function ProductsPage() {
         buildApiUrl(API_ROUTES.PRODUCTS.UPDATE(editingProduct._id)),
         {
           method: "PUT",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify(productData),
         }
       )
@@ -583,10 +568,7 @@ export default function ProductsPage() {
     try {
       const response = await fetch(buildApiUrl(API_ROUTES.PRODUCTS.CREATE), {
         method: "POST",
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(productData),
       })
 
@@ -625,10 +607,7 @@ export default function ProductsPage() {
       if (search) url.searchParams.set("search", search)
 
       const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {

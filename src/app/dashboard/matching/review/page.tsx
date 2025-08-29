@@ -45,6 +45,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
 import { buildApiUrl } from "@/lib/api"
+import { getAuthHeaders } from "@/lib/auth"
 
 interface MatchingRecord {
   _id: string
@@ -204,9 +205,7 @@ function MatchingReviewPageContent() {
     try {
       setTasksLoading(true)
       const response = await fetch(buildApiUrl("/matching/tasks"), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -309,10 +308,7 @@ function MatchingReviewPageContent() {
       url.searchParams.set("limit", pagination.limit.toString())
 
       const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: "Bearer dev-mock-token",
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
@@ -362,10 +358,7 @@ function MatchingReviewPageContent() {
         buildApiUrl(`/matching/records/${recordId}/review`),
         {
           method: "POST",
-          headers: {
-            Authorization: "Bearer dev-mock-token",
-            "Content-Type": "application/json",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             action,
             productId,
@@ -460,10 +453,7 @@ function MatchingReviewPageContent() {
         buildApiUrl("/matching/records/batch-review"),
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer dev-mock-token",
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify(requestBody),
         }
       )
