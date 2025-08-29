@@ -1,6 +1,6 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button, ScrollShadow, Tooltip, Divider, Chip } from "@nextui-org/react"
 import {
@@ -15,7 +15,7 @@ import {
   ListChecks,
 } from "lucide-react"
 import { useAuthStore } from "@/stores/auth"
-import { useAppStore } from "@/stores/app"
+import { useAppStore, useNotifications } from "@/stores/app"
 import { ROUTES } from "@/constants"
 import { cn } from "@/lib/utils"
 import type { NavItem } from "@/types"
@@ -79,11 +79,16 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useAppStore()
+  const { success: showSuccess } = useNotifications()
 
   const handleLogout = () => {
     logout()
+    showSuccess("退出成功", "您已安全退出系统")
+    // 跳转到登录页面
+    router.push(ROUTES.LOGIN)
   }
 
   const isActive = (href: string) => {

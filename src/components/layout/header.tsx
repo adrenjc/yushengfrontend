@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   Navbar,
   NavbarContent,
@@ -29,6 +30,7 @@ import { useTheme } from "next-themes"
 import { useAuthStore } from "@/stores/auth"
 import { useAppStore, useNotifications } from "@/stores/app"
 import { formatDate } from "@/lib/utils"
+import { ROUTES } from "@/constants"
 
 interface HeaderProps {
   title?: string
@@ -36,6 +38,7 @@ interface HeaderProps {
 }
 
 export function Header({ title, className }: HeaderProps) {
+  const router = useRouter()
   const { theme, setTheme } = useTheme()
   const { user, logout } = useAuthStore()
   const { notifications } = useAppStore()
@@ -66,6 +69,8 @@ export function Header({ title, className }: HeaderProps) {
   const handleLogout = () => {
     logout()
     showSuccess("退出成功", "您已安全退出系统")
+    // 立即跳转到登录页面
+    router.push(ROUTES.LOGIN)
   }
 
   const handleSearch = (e: React.FormEvent) => {
