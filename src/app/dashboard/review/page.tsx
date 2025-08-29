@@ -65,6 +65,8 @@ const mockReviewItems: MatchingRecord[] = [
   {
     _id: "1",
     taskId: "task1",
+    wholesaleName: "中华软包香烟",
+    wholesalePrice: 25.5,
     originalData: {
       name: "中华软包香烟",
       brand: "中华",
@@ -97,12 +99,15 @@ const mockReviewItems: MatchingRecord[] = [
     selectedMatch: null,
     status: "reviewing",
     priority: "medium",
+    reviewHistory: [],
     createdAt: "2024-11-26T10:30:00Z",
     updatedAt: "2024-11-26T10:30:00Z",
   },
   {
     _id: "2",
     taskId: "task1",
+    wholesaleName: "玉溪硬包",
+    wholesalePrice: 22.0,
     originalData: {
       name: "玉溪硬包",
       brand: "玉溪",
@@ -125,12 +130,15 @@ const mockReviewItems: MatchingRecord[] = [
     selectedMatch: null,
     status: "reviewing",
     priority: "high",
+    reviewHistory: [],
     createdAt: "2024-11-26T09:15:00Z",
     updatedAt: "2024-11-26T09:15:00Z",
   },
   {
     _id: "3",
     taskId: "task2",
+    wholesaleName: "芙蓉王软包烟",
+    wholesalePrice: 28.5,
     originalData: {
       name: "芙蓉王软包烟",
       brand: "芙蓉王",
@@ -164,6 +172,7 @@ const mockReviewItems: MatchingRecord[] = [
     status: "reviewing",
     priority: "low",
     exceptions: ["价格差异较大"],
+    reviewHistory: [],
     createdAt: "2024-11-25T16:45:00Z",
     updatedAt: "2024-11-25T16:45:00Z",
   },
@@ -268,10 +277,12 @@ export default function ReviewPage() {
 
   const filteredItems = reviewItems.filter(item => {
     const matchesSearch =
-      item.originalData.name
-        .toLowerCase()
+      item.originalData?.name
+        ?.toLowerCase()
         .includes(searchValue.toLowerCase()) ||
-      item.originalData.brand.toLowerCase().includes(searchValue.toLowerCase())
+      item.originalData?.brand
+        ?.toLowerCase()
+        .includes(searchValue.toLowerCase())
     const matchesStatus =
       selectedStatus === "all" || item.status === selectedStatus
     const matchesPriority =
@@ -305,10 +316,19 @@ export default function ReviewPage() {
         item._id === selectedItem._id
           ? {
               ...item,
-              status: reviewAction === "approve" ? "approved" : "rejected",
+              status:
+                reviewAction === "approve"
+                  ? ("approved" as const)
+                  : ("rejected" as const),
               selectedMatch:
                 reviewAction === "approve" && selectedCandidate
-                  ? item.candidates.find(c => c.productId === selectedCandidate)
+                  ? {
+                      productId: selectedCandidate,
+                      confirmedBy: "current-user", // TODO: 使用实际用户ID
+                      confirmedAt: new Date().toISOString(),
+                      note: reviewComment,
+                      confidence: 100,
+                    }
                   : null,
             }
           : item
@@ -330,8 +350,20 @@ export default function ReviewPage() {
         i._id === item._id
           ? {
               ...i,
-              status: action === "approve" ? "approved" : "rejected",
-              selectedMatch: action === "approve" ? i.candidates[0] : null,
+              status:
+                action === "approve"
+                  ? ("approved" as const)
+                  : ("rejected" as const),
+              selectedMatch:
+                action === "approve" && i.candidates[0]
+                  ? {
+                      productId: i.candidates[0].productId,
+                      confirmedBy: "current-user", // TODO: 使用实际用户ID
+                      confirmedAt: new Date().toISOString(),
+                      note: "",
+                      confidence: 100,
+                    }
+                  : null,
             }
           : i
       )
@@ -343,13 +375,13 @@ export default function ReviewPage() {
       case "original":
         return (
           <div>
-            <p className="font-medium">{item.originalData.name}</p>
+            <p className="font-medium">{item.originalData?.name}</p>
             <p className="text-sm text-default-500">
-              {item.originalData.brand}
+              {item.originalData?.brand}
             </p>
             <p className="text-sm text-default-400">
-              {formatCurrency(item.originalData.price)} |{" "}
-              {item.originalData.specifications}
+              {formatCurrency(item.originalData?.price ?? 0)} |{" "}
+              {item.originalData?.specifications}
             </p>
           </div>
         )
@@ -362,10 +394,10 @@ export default function ReviewPage() {
               <ConfidenceChip confidence={bestCandidate.confidence} />
             </div>
             <p className="text-sm text-default-500">
-              相似度: {formatPercentage(bestCandidate.similarity)}
+              相似度: {formatPercentage(bestCandidate.similarity ?? 0)}
             </p>
             <p className="text-sm text-default-400">
-              {formatCurrency(bestCandidate.price)}
+              {formatCurrency(bestCandidate.price ?? 0)}
             </p>
             {item.candidates.length > 1 && (
               <Badge content={item.candidates.length} color="primary" size="sm">
@@ -656,25 +688,27 @@ export default function ReviewPage() {
                       <div>
                         <p className="text-sm text-default-500">商品名称</p>
                         <p className="font-medium">
-                          {selectedItem.originalData.name}
+                          {selectedItem.originalData?.name}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm text-default-500">品牌</p>
                         <p className="font-medium">
-                          {selectedItem.originalData.brand}
+                          {selectedItem.originalData?.brand}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm text-default-500">价格</p>
                         <p className="font-medium">
-                          {formatCurrency(selectedItem.originalData.price)}
+                          {formatCurrency(
+                            selectedItem.originalData?.price ?? 0
+                          )}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm text-default-500">规格</p>
                         <p className="font-medium">
-                          {selectedItem.originalData.specifications}
+                          {selectedItem.originalData?.specifications}
                         </p>
                       </div>
                     </div>
@@ -714,7 +748,9 @@ export default function ReviewPage() {
                                     color="primary"
                                     size="sm"
                                   >
-                                    {formatPercentage(candidate.similarity)}
+                                    {formatPercentage(
+                                      candidate.similarity ?? 0
+                                    )}
                                   </Chip>
                                 </div>
                               </div>
@@ -725,7 +761,7 @@ export default function ReviewPage() {
                                     价格
                                   </p>
                                   <p className="font-medium">
-                                    {formatCurrency(candidate.price)}
+                                    {formatCurrency(candidate.price ?? 0)}
                                   </p>
                                 </div>
                                 <div>
@@ -733,7 +769,9 @@ export default function ReviewPage() {
                                     价格匹配度
                                   </p>
                                   <p className="font-medium">
-                                    {formatPercentage(candidate.priceMatch)}
+                                    {formatPercentage(
+                                      candidate.priceMatch ?? 0
+                                    )}
                                   </p>
                                 </div>
                               </div>
@@ -743,11 +781,11 @@ export default function ReviewPage() {
                                   匹配原因
                                 </p>
                                 <div className="flex flex-wrap gap-1">
-                                  {candidate.reasons.map((reason, idx) => (
+                                  {candidate.reasons?.map((reason, idx) => (
                                     <Chip key={idx} variant="flat" size="sm">
                                       {reason}
                                     </Chip>
-                                  ))}
+                                  )) || []}
                                 </div>
                               </div>
                             </CardBody>

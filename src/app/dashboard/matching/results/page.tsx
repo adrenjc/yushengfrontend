@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   Card,
@@ -146,7 +146,7 @@ const MatchTypeChip = ({ matchType }: { matchType: string }) => {
   )
 }
 
-export default function MatchingResultsPage() {
+function MatchingResultsPageContent() {
   const searchParams = useSearchParams()
   const taskId = searchParams.get("taskId")
   const taskName = searchParams.get("taskName") || "未知任务"
@@ -1342,5 +1342,22 @@ export default function MatchingResultsPage() {
         isLoadingProducts={isLoadingProducts}
       />
     </div>
+  )
+}
+
+export default function MatchingResultsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+            <p>加载中...</p>
+          </div>
+        </div>
+      }
+    >
+      <MatchingResultsPageContent />
+    </Suspense>
   )
 }

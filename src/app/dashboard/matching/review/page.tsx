@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   Card,
@@ -154,7 +154,7 @@ const PriorityChip = ({ priority }: { priority: string }) => {
   )
 }
 
-export default function MatchingReviewPage() {
+function MatchingReviewPageContent() {
   const searchParams = useSearchParams()
   const taskId = searchParams.get("taskId")
   const taskName = searchParams.get("taskName") || "未知任务"
@@ -1418,5 +1418,22 @@ export default function MatchingReviewPage() {
         </Modal>
       )}
     </div>
+  )
+}
+
+export default function MatchingReviewPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+            <p>加载中...</p>
+          </div>
+        </div>
+      }
+    >
+      <MatchingReviewPageContent />
+    </Suspense>
   )
 }

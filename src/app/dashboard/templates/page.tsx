@@ -50,7 +50,7 @@ import { useNotifications } from "@/stores/app"
 import { buildApiUrl } from "@/lib/api"
 
 interface ProductTemplate {
-  _id: string
+  id: string
   name: string
   description: string
   category: string
@@ -554,10 +554,14 @@ export default function TemplatesPage() {
               className="max-w-xs"
               size="sm"
             >
-              <SelectItem key="all">全部分类</SelectItem>
-              {categoryOptions.map(category => (
-                <SelectItem key={category}>{category}</SelectItem>
-              ))}
+              <>
+                <SelectItem key="all">全部分类</SelectItem>
+                {categoryOptions.map(category => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </>
             </Select>
             <Select
               placeholder="状态筛选"
@@ -676,7 +680,7 @@ export default function TemplatesPage() {
                             >
                               复制
                             </DropdownItem>
-                            {!template.isDefault && (
+                            {!template.isDefault ? (
                               <DropdownItem
                                 key="default"
                                 startContent={<Star className="h-4 w-4" />}
@@ -684,8 +688,8 @@ export default function TemplatesPage() {
                               >
                                 设为默认
                               </DropdownItem>
-                            )}
-                            {!template.isDefault && (
+                            ) : null}
+                            {!template.isDefault ? (
                               <DropdownItem
                                 key="delete"
                                 startContent={<Trash2 className="h-4 w-4" />}
@@ -694,7 +698,7 @@ export default function TemplatesPage() {
                               >
                                 删除
                               </DropdownItem>
-                            )}
+                            ) : null}
                           </DropdownMenu>
                         </Dropdown>
                       </TableCell>

@@ -71,10 +71,16 @@ export interface SimilarityScore {
 
 export interface MatchingCandidate {
   productId: string
+  productName: string
   product?: Product
-  score: SimilarityScore
+  score?: SimilarityScore
   confidence: "high" | "medium" | "low"
   reason?: string
+  brand?: string
+  similarity?: number
+  price?: number
+  priceMatch?: number
+  reasons?: string[]
 }
 
 export interface MatchingRecord {
@@ -90,12 +96,26 @@ export interface MatchingRecord {
     confirmedAt: string
     note?: string
     confidence: number
-  }
-  status: "pending" | "reviewing" | "confirmed" | "rejected" | "exception"
+  } | null
+  status:
+    | "pending"
+    | "reviewing"
+    | "confirmed"
+    | "rejected"
+    | "exception"
+    | "approved"
   priority: "high" | "medium" | "low"
   reviewHistory: ReviewRecord[]
   createdAt: string
   updatedAt: string
+  originalData?: {
+    name: string
+    brand: string
+    price: number
+    specifications: string
+    category: string
+  }
+  exceptions?: string[]
 }
 
 export interface ReviewRecord {

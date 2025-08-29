@@ -456,9 +456,14 @@ export default function SettingsPage() {
                     </label>
                     <Slider
                       value={[config.general.backupInterval]}
-                      onChange={([value]) =>
-                        handleConfigChange("general", "backupInterval", value)
-                      }
+                      onChange={value => {
+                        const newValue = Array.isArray(value) ? value[0] : value
+                        handleConfigChange(
+                          "general",
+                          "backupInterval",
+                          newValue
+                        )
+                      }}
                       minValue={1}
                       maxValue={168}
                       step={1}
@@ -475,9 +480,10 @@ export default function SettingsPage() {
                     </label>
                     <Slider
                       value={[config.general.maxFileSize]}
-                      onChange={([value]) =>
-                        handleConfigChange("general", "maxFileSize", value)
-                      }
+                      onChange={value => {
+                        const newValue = Array.isArray(value) ? value[0] : value
+                        handleConfigChange("general", "maxFileSize", newValue)
+                      }}
                       minValue={1}
                       maxValue={100}
                       step={1}
@@ -509,13 +515,14 @@ export default function SettingsPage() {
                     </label>
                     <Slider
                       value={[config.matching.defaultThreshold]}
-                      onChange={([value]) =>
+                      onChange={value => {
+                        const newValue = Array.isArray(value) ? value[0] : value
                         handleConfigChange(
                           "matching",
                           "defaultThreshold",
-                          value
+                          newValue
                         )
-                      }
+                      }}
                       minValue={50}
                       maxValue={100}
                       step={1}
@@ -532,13 +539,14 @@ export default function SettingsPage() {
                     </label>
                     <Slider
                       value={[config.matching.autoConfirmThreshold]}
-                      onChange={([value]) =>
+                      onChange={value => {
+                        const newValue = Array.isArray(value) ? value[0] : value
                         handleConfigChange(
                           "matching",
                           "autoConfirmThreshold",
-                          value
+                          newValue
                         )
-                      }
+                      }}
                       minValue={80}
                       maxValue={100}
                       step={1}
@@ -576,9 +584,12 @@ export default function SettingsPage() {
                             </div>
                             <Slider
                               value={[value]}
-                              onChange={([newValue]) =>
-                                handleWeightChange(key, newValue)
-                              }
+                              onChange={newValue => {
+                                const val = Array.isArray(newValue)
+                                  ? newValue[0]
+                                  : newValue
+                                handleWeightChange(key, val)
+                              }}
                               minValue={0}
                               maxValue={50}
                               step={1}
@@ -737,18 +748,19 @@ export default function SettingsPage() {
                   <label className="text-sm font-medium">最小密码长度</label>
                   <Slider
                     value={[config.security.passwordPolicy.minLength]}
-                    onChange={([value]) =>
+                    onChange={value => {
+                      const newValue = Array.isArray(value) ? value[0] : value
                       setConfig(prev => ({
                         ...prev,
                         security: {
                           ...prev.security,
                           passwordPolicy: {
                             ...prev.security.passwordPolicy,
-                            minLength: value,
+                            minLength: newValue,
                           },
                         },
                       }))
-                    }
+                    }}
                     minValue={6}
                     maxValue={20}
                     step={1}
@@ -820,18 +832,19 @@ export default function SettingsPage() {
                   <label className="text-sm font-medium">会话超时 (分钟)</label>
                   <Slider
                     value={[config.security.sessionSecurity.idleTimeout]}
-                    onChange={([value]) =>
+                    onChange={value => {
+                      const newValue = Array.isArray(value) ? value[0] : value
                       setConfig(prev => ({
                         ...prev,
                         security: {
                           ...prev.security,
                           sessionSecurity: {
                             ...prev.security.sessionSecurity,
-                            idleTimeout: value,
+                            idleTimeout: newValue,
                           },
                         },
                       }))
-                    }
+                    }}
                     minValue={5}
                     maxValue={120}
                     step={5}

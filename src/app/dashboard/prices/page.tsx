@@ -69,7 +69,7 @@ export default function PricesPage() {
   if (isProductsLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <LoadingSpinner size="large" />
+        <LoadingSpinner size="lg" />
       </div>
     )
   }

@@ -132,15 +132,24 @@ export function Header({ title, className }: HeaderProps) {
             </DropdownTrigger>
             <DropdownMenu
               selectedKeys={[theme || "system"]}
-              onAction={(key) => handleThemeChange(key as string)}
+              onAction={key => handleThemeChange(key as string)}
             >
-              <DropdownItem key="light" startContent={<Sun className="h-4 w-4" />}>
+              <DropdownItem
+                key="light"
+                startContent={<Sun className="h-4 w-4" />}
+              >
                 浅色模式
               </DropdownItem>
-              <DropdownItem key="dark" startContent={<Moon className="h-4 w-4" />}>
+              <DropdownItem
+                key="dark"
+                startContent={<Moon className="h-4 w-4" />}
+              >
                 深色模式
               </DropdownItem>
-              <DropdownItem key="system" startContent={<Monitor className="h-4 w-4" />}>
+              <DropdownItem
+                key="system"
+                startContent={<Monitor className="h-4 w-4" />}
+              >
                 跟随系统
               </DropdownItem>
             </DropdownMenu>
@@ -163,31 +172,35 @@ export function Header({ title, className }: HeaderProps) {
               </Button>
             </DropdownTrigger>
             <DropdownMenu className="w-80">
-              {notifications.length === 0 ? (
-                <DropdownItem key="empty" className="text-center opacity-50">
-                  暂无通知
-                </DropdownItem>
-              ) : (
-                notifications.slice(0, 5).map((notification) => (
-                  <DropdownItem
-                    key={notification.id}
-                    className="py-3"
-                    description={formatDate(notification.timestamp)}
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-medium">{notification.title}</span>
-                      <span className="text-sm text-default-500">
-                        {notification.message}
-                      </span>
-                    </div>
+              <>
+                {notifications.length === 0 ? (
+                  <DropdownItem key="empty" className="text-center opacity-50">
+                    暂无通知
                   </DropdownItem>
-                ))
-              )}
-              {notifications.length > 5 && (
-                <DropdownItem key="more" className="text-center text-primary">
-                  查看更多通知
-                </DropdownItem>
-              )}
+                ) : (
+                  notifications.slice(0, 5).map(notification => (
+                    <DropdownItem
+                      key={notification.id}
+                      className="py-3"
+                      description={formatDate(notification.timestamp)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {notification.title}
+                        </span>
+                        <span className="text-sm text-default-500">
+                          {notification.message}
+                        </span>
+                      </div>
+                    </DropdownItem>
+                  ))
+                )}
+                {notifications.length > 5 ? (
+                  <DropdownItem key="more" className="text-center text-primary">
+                    查看更多通知
+                  </DropdownItem>
+                ) : null}
+              </>
             </DropdownMenu>
           </Dropdown>
         </NavbarItem>
@@ -207,7 +220,15 @@ export function Header({ title, className }: HeaderProps) {
               <DropdownItem
                 key="profile"
                 className="py-2"
-                description={user?.email}
+                description={
+                  user?.role === "admin"
+                    ? "管理员"
+                    : user?.role === "reviewer"
+                      ? "审核员"
+                      : user?.role === "operator"
+                        ? "操作员"
+                        : "未知角色"
+                }
                 startContent={<User className="h-4 w-4" />}
               >
                 <span className="font-medium">{user?.username}</span>

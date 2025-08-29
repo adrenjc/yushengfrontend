@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
 import type { User, LoginCredentials, AuthResponse } from "@/types"
 import { STORAGE_KEYS } from "@/constants"
+import { buildApiUrl } from "@/lib/api"
 
 interface AuthState {
   user: User | null
@@ -99,7 +100,7 @@ export const useAuthStore = create<AuthStore>()(
           set({ isLoading: true, error: null })
 
           try {
-            const response = await fetch(`/api/auth/login`, {
+            const response = await fetch(buildApiUrl("/auth/login"), {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -171,7 +172,7 @@ export const useAuthStore = create<AuthStore>()(
           }
 
           try {
-            const response = await fetch(`/api/auth/refresh`, {
+            const response = await fetch(buildApiUrl("/auth/refresh"), {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
