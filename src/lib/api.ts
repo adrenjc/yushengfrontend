@@ -3,6 +3,8 @@
  * 统一管理所有API请求的基础配置
  */
 
+import { getAuthToken } from "./auth"
+
 // API基础配置
 const API_CONFIG = {
   BASE_URL:
@@ -13,7 +15,6 @@ const API_CONFIG = {
   TIMEOUT: parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || "30000"), // 30秒超时
   HEADERS: {
     "Content-Type": "application/json",
-    Authorization: "Bearer dev-mock-token", // 开发环境mock token
   },
 }
 
@@ -65,6 +66,25 @@ export const buildApiUrl = (path: string): string => {
 }
 
 /**
+ * 获取带认证头的请求头
+ */
+const getAuthHeaders = (): HeadersInit => {
+  const headers: HeadersInit = { ...API_CONFIG.HEADERS }
+  
+  // 动态获取当前的认证 token
+  const token = getAuthToken()
+  
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  } else if (process.env.NODE_ENV === "development") {
+    // 开发环境下如果没有真实token，使用mock token
+    headers.Authorization = "Bearer dev-mock-token"
+  }
+  
+  return headers
+}
+
+/**
  * 统一的fetch请求封装
  */
 export const apiRequest = async <T = any>(
@@ -75,7 +95,7 @@ export const apiRequest = async <T = any>(
 
   const config: RequestInit = {
     headers: {
-      ...API_CONFIG.HEADERS,
+      ...getAuthHeaders(),
       ...options.headers,
     },
     ...options,
@@ -146,3 +166,26 @@ export const apiPut = <T = any>(url: string, data?: any): Promise<T> => {
 export const apiDelete = <T = any>(url: string): Promise<T> => {
   return apiRequest<T>(url, { method: "DELETE" })
 }
+
+/**
+ * 快速创建带认证的 fetch 请求
+ * 用于替换页面中硬编码的 fetch 调用
+ */
+export const createAuthenticatedFetch = () => {
+  return (url: string, options: RequestInit = {}): Promise<Response> => {
+    const fullUrl = url.startsWith("http") ? url : buildApiUrl(url)
+    
+    const config: RequestInit = {
+      headers: {
+        ...getAuthHeaders(),
+        ...options.headers,
+      },
+      ...options,
+    }
+    
+    return fetch(fullUrl, config)
+  }
+}
+
+// 导出一个默认的认证 fetch 实例
+export const authFetch = createAuthenticatedFetch()

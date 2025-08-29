@@ -29,3 +29,24 @@ export function ensureDevToken(): string | null {
   }
   return null
 }
+
+/**
+ * 获取认证头对象（用于页面组件）
+ * 提供一个统一的方式获取认证头，替代硬编码
+ */
+export function getAuthHeaders(): HeadersInit {
+  const token = getAuthToken()
+  
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  }
+  
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  } else if (process.env.NODE_ENV === "development") {
+    // 开发环境下如果没有真实token，使用mock token
+    headers.Authorization = "Bearer dev-mock-token"
+  }
+  
+  return headers
+}
