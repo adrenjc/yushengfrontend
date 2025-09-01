@@ -54,19 +54,7 @@ export const useAuthStore = create<AuthStore>()(
             try {
               const user = JSON.parse(storedUser)
 
-              // 开发模式下跳过JWT解析，直接使用mock token
-              if (
-                process.env.NODE_ENV === "development" &&
-                storedToken === "dev-mock-token"
-              ) {
-                set({
-                  user,
-                  token: storedToken,
-                  refreshToken: storedRefreshToken,
-                  isAuthenticated: true,
-                })
-                return
-              }
+              // 移除开发模式特殊处理，统一使用真实token验证
 
               // 生产模式下检查token是否过期
               try {

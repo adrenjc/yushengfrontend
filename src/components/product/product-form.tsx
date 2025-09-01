@@ -206,15 +206,16 @@ export function ProductForm({
 
     // 清理空的嵌套对象
     Object.keys(formData).forEach(key => {
+      const keyName = key as keyof typeof formData
       if (
-        typeof formData[key] === "object" &&
-        formData[key] !== null &&
-        !Array.isArray(formData[key])
+        typeof formData[keyName] === "object" &&
+        formData[keyName] !== null &&
+        !Array.isArray(formData[keyName])
       ) {
-        const nested = formData[key]
+        const nested = formData[keyName] as Record<string, any>
         const hasValues = Object.values(nested).some(v => v !== undefined)
         if (!hasValues) {
-          delete formData[key]
+          delete (formData as any)[keyName]
         }
       }
     })

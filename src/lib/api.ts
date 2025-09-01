@@ -77,9 +77,6 @@ const getAuthHeaders = (): HeadersInit => {
 
   if (token) {
     headers.Authorization = `Bearer ${token}`
-  } else if (process.env.NODE_ENV === "development") {
-    // 开发环境下如果没有真实token，使用mock token
-    headers.Authorization = "Bearer dev-mock-token"
   }
 
   return headers
@@ -97,9 +94,6 @@ export const getAuthOnlyHeaders = (): HeadersInit => {
 
   if (token) {
     headers.Authorization = `Bearer ${token}`
-  } else if (process.env.NODE_ENV === "development") {
-    // 开发环境下如果没有真实token，使用mock token
-    headers.Authorization = "Bearer dev-mock-token"
   }
 
   return headers

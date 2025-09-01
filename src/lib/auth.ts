@@ -24,9 +24,6 @@ export function getAuthToken(): string | null {
 export function ensureDevToken(): string | null {
   const token = getAuthToken()
   if (token) return token
-  if (process.env.NODE_ENV === "development") {
-    return "dev-mock-token"
-  }
   return null
 }
 
@@ -36,17 +33,14 @@ export function ensureDevToken(): string | null {
  */
 export function getAuthHeaders(): HeadersInit {
   const token = getAuthToken()
-  
+
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   }
-  
+
   if (token) {
     headers.Authorization = `Bearer ${token}`
-  } else if (process.env.NODE_ENV === "development") {
-    // 开发环境下如果没有真实token，使用mock token
-    headers.Authorization = "Bearer dev-mock-token"
   }
-  
+
   return headers
 }

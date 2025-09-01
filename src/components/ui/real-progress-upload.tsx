@@ -23,6 +23,7 @@ import {
   Download,
 } from "lucide-react"
 import { useNotifications } from "@/stores/app"
+import { getAuthToken } from "@/lib/auth"
 
 interface UploadResult {
   total: number
@@ -220,12 +221,10 @@ export function RealProgressUpload({
 
       // 开始上传
       xhr.open("POST", endpoint)
-      xhr.setRequestHeader(
-        "Authorization",
-        localStorage.getItem("token")
-          ? `Bearer ${localStorage.getItem("token")}`
-          : "Bearer dev-mock-token"
-      )
+      const token = getAuthToken()
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+      }
       xhr.send(formData)
     } catch (error) {
       setStage(UploadStage.ERROR)
@@ -263,9 +262,10 @@ export function RealProgressUpload({
   }
 
   const downloadTemplate = (format: "csv" | "excel" = "excel") => {
-    // 创建一个包含正确字段的模板
+    // 创建一个包含正确字段的美观模板
     const headers = [
       "商品名称",
+      "公司价",
       "品牌",
       "产品编码",
       "盒码编码",
@@ -286,30 +286,80 @@ export function RealProgressUpload({
       "单位",
     ]
 
-    const sampleData = [
-      "示例商品",
-      "示例品牌",
-      "123456789",
-      "987654321",
-      "烤烟型",
-      "条盒硬盒",
-      "24.20",
-      "84.0(30+54) mm",
-      "200",
-      "2023-01-01",
-      "10",
-      "1.0",
-      "11",
-      "金",
-      "示例企业",
-      "否",
-      "一类",
-      "100",
-      "元/条",
+    // 提供更美观和真实的多行示例数据
+    const sampleDataRows = [
+      [
+        "中华(软)",
+        "424",
+        "中华",
+        "6901028042758",
+        "6901028042741",
+        "烤烟型",
+        "条盒软盒",
+        "24.4",
+        "84.0(30+54) mm",
+        "200",
+        "2023-01-10",
+        "10",
+        "1.0",
+        "11",
+        "红色",
+        "上海烟草集团有限责任公司",
+        "否",
+        "一类",
+        "600",
+        "元/条",
+      ],
+      [
+        "玉溪(软蓝)",
+        "263",
+        "玉溪",
+        "6901028212588",
+        "6901028212571",
+        "烤烟型",
+        "条盒软盒",
+        "24.2",
+        "84.0(30+54) mm",
+        "200",
+        "2023-01-10",
+        "8",
+        "0.8",
+        "9",
+        "蓝色",
+        "红塔烟草(集团)有限责任公司",
+        "否",
+        "二类",
+        "380",
+        "元/条",
+      ],
+      [
+        "云烟(大重九)",
+        "200",
+        "云烟",
+        "6901029809024",
+        "6901029809017",
+        "混合型",
+        "条盒硬盒",
+        "24.0",
+        "84.0(30+54) mm",
+        "200",
+        "2023-01-10",
+        "12",
+        "1.2",
+        "13",
+        "金色",
+        "云南中烟工业有限责任公司",
+        "否",
+        "二类",
+        "280",
+        "元/条",
+      ],
     ]
 
     if (format === "csv") {
-      const csvContent = headers.join(",") + "\n" + sampleData.join(",")
+      // 创建包含表头和多行示例数据的CSV
+      const allRows = [headers, ...sampleDataRows]
+      const csvContent = allRows.map(row => row.join(",")).join("\n")
       const blob = new Blob(["\ufeff" + csvContent], {
         type: "text/csv;charset=utf-8;",
       })
@@ -325,10 +375,65 @@ export function RealProgressUpload({
       // 使用xlsx创建Excel文件
       import("xlsx")
         .then(XLSX => {
-          const ws = XLSX.utils.aoa_to_sheet([headers, sampleData])
+          // 创建包含表头和多行示例数据的工作表
+          const allRows = [headers, ...sampleDataRows]
+          const ws = XLSX.utils.aoa_to_sheet(allRows)
+
+          // 设置列宽以提高美观度（按新字段顺序）
+          const colWidths = [
+            { wch: 20 }, // 商品名称
+            { wch: 10 }, // 公司价
+            { wch: 12 }, // 品牌
+            { wch: 15 }, // 产品编码
+            { wch: 15 }, // 盒码编码
+            { wch: 10 }, // 产品类型
+            { wch: 12 }, // 包装类型
+            { wch: 12 }, // 烟支周长
+            { wch: 18 }, // 烟支长度
+            { wch: 10 }, // 包装数量
+            { wch: 12 }, // 上市时间
+            { wch: 12 }, // 焦油含量
+            { wch: 12 }, // 烟气烟碱量
+            { wch: 15 }, // 烟气一氧化碳量
+            { wch: 8 }, // 颜色
+            { wch: 25 }, // 所属企业
+            { wch: 10 }, // 是否爆珠
+            { wch: 10 }, // 价格类型
+            { wch: 10 }, // 零售价
+            { wch: 8 }, // 单位
+          ]
+          ws["!cols"] = colWidths
+
+          // 设置表头样式：黑字蓝底
+          const headerStyle = {
+            fill: {
+              fgColor: { rgb: "4472C4" }, // 蓝色背景
+            },
+            font: {
+              color: { rgb: "FFFFFF" }, // 白色字体
+              bold: true,
+            },
+            alignment: {
+              horizontal: "center",
+              vertical: "center",
+            },
+          }
+
+          // 为表头行的每个单元格设置样式
+          for (let col = 0; col < headers.length; col++) {
+            const cellRef = XLSX.utils.encode_cell({ r: 0, c: col })
+            if (!ws[cellRef]) continue
+            ws[cellRef].s = headerStyle
+          }
+
           const wb = XLSX.utils.book_new()
           XLSX.utils.book_append_sheet(wb, ws, "商品导入模板")
           XLSX.writeFile(wb, "商品导入模板.xlsx")
+
+          notifications.success(
+            "模板下载成功",
+            "Excel模板已下载，包含详细示例数据"
+          )
         })
         .catch(() => {
           // 如果xlsx加载失败，回退到CSV
