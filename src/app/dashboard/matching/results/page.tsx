@@ -67,9 +67,33 @@ interface MatchingResult {
       _id: string
       name: string
       brand: string
-      companyPrice: number
+      company: string
+      productType: string
+      packageType: string
+      specifications: {
+        circumference: number
+        length: string
+        packageQuantity: number
+      }
+      chemicalContent: {
+        tarContent: number
+        nicotineContent: number
+        carbonMonoxideContent: number
+      }
+      appearance: {
+        color: string
+      }
+      features: {
+        hasPop: boolean
+      }
+      pricing: {
+        priceCategory: string
+        retailPrice: number
+        unit: string
+        companyPrice: number
+      }
+      productCode: string
       boxCode: string
-      barcode: string
     }
     confidence: number
     score: number
@@ -106,9 +130,33 @@ interface Product {
   _id: string
   name: string
   brand: string
-  companyPrice: number
+  company: string
+  productType: string
+  packageType: string
+  specifications: {
+    circumference: number
+    length: string
+    packageQuantity: number
+  }
+  chemicalContent: {
+    tarContent: number
+    nicotineContent: number
+    carbonMonoxideContent: number
+  }
+  appearance: {
+    color: string
+  }
+  features: {
+    hasPop: boolean
+  }
+  pricing: {
+    priceCategory: string
+    retailPrice: number
+    unit: string
+    companyPrice: number
+  }
+  productCode: string
   boxCode: string
-  barcode: string
   keywords: string[]
   category: string
 }
@@ -270,7 +318,12 @@ function MatchingResultsPageContent() {
       // 获取文件名
       const contentDisposition = response.headers.get("content-disposition")
       const fileNameMatch = contentDisposition?.match(/filename\*?=([^;]+)/)
-      let fileName = `匹配结果_${taskInfo?.originalFilename || "结果"}.${format === "excel" ? "xlsx" : "csv"}`
+
+      // 从原文件名中提取基础名称（去掉扩展名）
+      const baseFilename = taskInfo?.originalFilename
+        ? taskInfo.originalFilename.replace(/\.[^/.]+$/, "") // 去掉任何扩展名
+        : "结果"
+      let fileName = `匹配结果_${baseFilename}.${format === "excel" ? "xlsx" : "csv"}`
 
       if (fileNameMatch) {
         fileName = decodeURIComponent(fileNameMatch[1].replace(/"/g, ""))
@@ -433,14 +486,18 @@ function MatchingResultsPageContent() {
     }
   }
 
-  // 过滤和分页商品 - 支持条码和盒码搜索
+  // 过滤和分页商品 - 支持全字段搜索
   const filteredProducts = templateProducts.filter(product => {
     const lowerSearchTerm = productSearchTerm.toLowerCase()
     return (
       product.name.toLowerCase().includes(lowerSearchTerm) ||
       product.brand.toLowerCase().includes(lowerSearchTerm) ||
-      product.barcode?.toLowerCase().includes(lowerSearchTerm) ||
+      product.company?.toLowerCase().includes(lowerSearchTerm) ||
+      product.productType?.toLowerCase().includes(lowerSearchTerm) ||
+      product.packageType?.toLowerCase().includes(lowerSearchTerm) ||
+      product.productCode?.toLowerCase().includes(lowerSearchTerm) ||
       product.boxCode?.toLowerCase().includes(lowerSearchTerm) ||
+      product.pricing?.priceCategory?.toLowerCase().includes(lowerSearchTerm) ||
       product.keywords.some(keyword =>
         keyword.toLowerCase().includes(lowerSearchTerm)
       )
@@ -622,9 +679,15 @@ function MatchingResultsPageContent() {
         "供应商",
         "匹配商品",
         "匹配品牌",
+        "所属企业",
+        "产品类型",
+        "价格类型",
         "公司价",
-        "条码",
+        "单位",
+        "产品编码",
         "盒码",
+        "包装类型",
+        "是否爆珠",
         "置信度",
         "匹配方式",
         "状态",
@@ -637,9 +700,17 @@ function MatchingResultsPageContent() {
         result.originalData.supplier || "",
         result.selectedMatch?.productId?.name || "无匹配",
         result.selectedMatch?.productId?.brand || "-",
-        result.selectedMatch?.productId?.companyPrice || 0,
-        result.selectedMatch?.productId?.barcode || "-",
+        result.selectedMatch?.productId?.company || "-",
+        result.selectedMatch?.productId?.productType || "-",
+        result.selectedMatch?.productId?.pricing?.priceCategory || "-",
+        result.selectedMatch?.productId?.pricing?.companyPrice ||
+          result.selectedMatch?.productId?.pricing?.retailPrice ||
+          0,
+        result.selectedMatch?.productId?.pricing?.unit || "元/条",
+        result.selectedMatch?.productId?.productCode || "-",
         result.selectedMatch?.productId?.boxCode || "-",
+        result.selectedMatch?.productId?.packageType || "-",
+        result.selectedMatch?.productId?.features?.hasPop ? "是" : "否",
         result.selectedMatch?.confidence
           ? `${result.selectedMatch.confidence}%`
           : "-",
@@ -1027,22 +1098,62 @@ function MatchingResultsPageContent() {
                       {result.selectedMatch &&
                       result.selectedMatch.productId ? (
                         <div className="space-y-1">
-                          <p className="font-medium">
+                          <p className="text-sm font-medium">
                             {result.selectedMatch.productId?.name || "产品名称"}
                           </p>
-                          <p className="text-xs text-default-500">
-                            {result.selectedMatch.productId?.brand ||
-                              "未知品牌"}{" "}
-                            | ¥
-                            {result.selectedMatch.productId?.companyPrice ||
+                          <div className="flex flex-wrap gap-1 text-xs text-default-500">
+                            <span className="font-medium">
+                              {result.selectedMatch.productId?.brand ||
+                                "未知品牌"}
+                            </span>
+                            {result.selectedMatch.productId?.company && (
+                              <>
+                                <span>|</span>
+                                <span>
+                                  {result.selectedMatch.productId.company}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1 text-xs">
+                            {result.selectedMatch.productId?.productType && (
+                              <Chip size="sm" variant="flat" color="primary">
+                                {result.selectedMatch.productId.productType}
+                              </Chip>
+                            )}
+                            {result.selectedMatch.productId?.pricing
+                              ?.priceCategory && (
+                              <Chip size="sm" variant="flat" color="secondary">
+                                {
+                                  result.selectedMatch.productId.pricing
+                                    .priceCategory
+                                }
+                              </Chip>
+                            )}
+                            {result.selectedMatch.productId?.features
+                              ?.hasPop && (
+                              <Chip size="sm" variant="flat" color="success">
+                                爆珠
+                              </Chip>
+                            )}
+                          </div>
+                          <div className="text-xs text-default-500">
+                            ¥
+                            {result.selectedMatch.productId?.pricing
+                              ?.companyPrice ||
+                              result.selectedMatch.productId?.pricing
+                                ?.retailPrice ||
                               "0"}
-                          </p>
-                          {(result.selectedMatch.productId?.barcode ||
+                            {result.selectedMatch.productId?.pricing?.unit &&
+                              ` / ${result.selectedMatch.productId.pricing.unit}`}
+                          </div>
+                          {(result.selectedMatch.productId?.productCode ||
                             result.selectedMatch.productId?.boxCode) && (
                             <div className="space-y-0.5">
-                              {result.selectedMatch.productId?.barcode && (
+                              {result.selectedMatch.productId?.productCode && (
                                 <p className="text-xs text-default-400">
-                                  条码: {result.selectedMatch.productId.barcode}
+                                  产品编码:{" "}
+                                  {result.selectedMatch.productId.productCode}
                                 </p>
                               )}
                               {result.selectedMatch.productId?.boxCode && (
@@ -1136,7 +1247,11 @@ function MatchingResultsPageContent() {
                       </p>
                       <p className="text-sm text-default-500">
                         {editingRecord.selectedMatch.productId.brand} | ¥
-                        {editingRecord.selectedMatch.productId.companyPrice}
+                        {editingRecord.selectedMatch.productId.pricing
+                          ?.companyPrice ||
+                          editingRecord.selectedMatch.productId.pricing
+                            ?.retailPrice ||
+                          0}
                       </p>
                     </div>
                     <Chip color="success" variant="flat">
@@ -1155,7 +1270,7 @@ function MatchingResultsPageContent() {
                     setTimeout(() => input.focus(), 100)
                   }
                 }}
-                placeholder="搜索商品名称、品牌、条码、盒码或关键词..."
+                placeholder="搜索商品名称、品牌、企业、产品类型、价格类型、条码、盒码或关键词..."
                 value={productSearchTerm}
                 onChange={e => {
                   setProductSearchTerm(e.target.value)
@@ -1222,37 +1337,173 @@ function MatchingResultsPageContent() {
                                   >
                                     {product.name}
                                   </p>
+
+                                  {/* 基本信息 */}
                                   <div className="space-y-1">
-                                    <p className="text-xs text-default-600">
-                                      品牌: {product.brand}
-                                    </p>
-                                    <p
-                                      className={`text-xs font-medium ${
-                                        isSelected
-                                          ? "text-primary-600"
-                                          : "text-success"
-                                      }`}
-                                    >
-                                      ¥{product.companyPrice}
-                                    </p>
-                                    {product.barcode && (
-                                      <p className="text-xs text-default-500">
-                                        条码: {product.barcode}
+                                    <div className="flex flex-wrap gap-2 text-xs text-default-600">
+                                      <span>{product.brand}</span>
+                                      {product.company && (
+                                        <>
+                                          <span>|</span>
+                                          <span>{product.company}</span>
+                                        </>
+                                      )}
+                                      {product.productType && (
+                                        <>
+                                          <span>|</span>
+                                          <span>{product.productType}</span>
+                                        </>
+                                      )}
+                                    </div>
+
+                                    {/* 价格信息 */}
+                                    <div className="flex items-center justify-between">
+                                      <p
+                                        className={`text-xs font-medium ${
+                                          isSelected
+                                            ? "text-primary-600"
+                                            : "text-success"
+                                        }`}
+                                      >
+                                        ¥
+                                        {product.pricing?.companyPrice ||
+                                          product.pricing?.retailPrice ||
+                                          0}
+                                        {product.pricing?.unit &&
+                                          ` / ${product.pricing.unit}`}
                                       </p>
+                                      {product.pricing?.priceCategory && (
+                                        <Chip
+                                          size="sm"
+                                          variant="flat"
+                                          color="secondary"
+                                          className="text-xs"
+                                        >
+                                          {product.pricing.priceCategory}
+                                        </Chip>
+                                      )}
+                                    </div>
+
+                                    {/* 规格信息 */}
+                                    {product.specifications && (
+                                      <div className="space-y-0.5">
+                                        {product.specifications
+                                          .circumference && (
+                                          <p className="text-xs text-default-500">
+                                            周长:{" "}
+                                            {
+                                              product.specifications
+                                                .circumference
+                                            }
+                                            mm
+                                          </p>
+                                        )}
+                                        {product.specifications.length && (
+                                          <p className="text-xs text-default-500">
+                                            长度:{" "}
+                                            {product.specifications.length}
+                                          </p>
+                                        )}
+                                      </div>
                                     )}
-                                    {product.boxCode && (
-                                      <p className="text-xs text-default-500">
-                                        盒码: {product.boxCode}
-                                      </p>
+
+                                    {/* 化学成分 */}
+                                    {product.chemicalContent && (
+                                      <div className="flex flex-wrap gap-2 text-xs text-default-500">
+                                        {product.chemicalContent.tarContent !==
+                                          undefined && (
+                                          <span>
+                                            焦油:
+                                            {product.chemicalContent.tarContent}
+                                            mg
+                                          </span>
+                                        )}
+                                        {product.chemicalContent
+                                          .nicotineContent !== undefined && (
+                                          <span>
+                                            烟碱:
+                                            {
+                                              product.chemicalContent
+                                                .nicotineContent
+                                            }
+                                            mg
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* 编码信息 */}
+                                    <div className="space-y-0.5">
+                                      {product.productCode && (
+                                        <p className="text-xs text-default-500">
+                                          产品编码: {product.productCode}
+                                        </p>
+                                      )}
+                                      {product.boxCode && (
+                                        <p className="text-xs text-default-500">
+                                          盒码: {product.boxCode}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* 特殊属性标签 */}
+                                  <div className="flex flex-wrap gap-1">
+                                    {product.packageType && (
+                                      <Chip
+                                        size="sm"
+                                        variant="flat"
+                                        color="default"
+                                        className="text-xs"
+                                      >
+                                        {product.packageType}
+                                      </Chip>
+                                    )}
+                                    {product.features?.hasPop && (
+                                      <Chip
+                                        size="sm"
+                                        variant="flat"
+                                        color="success"
+                                        className="text-xs"
+                                      >
+                                        爆珠
+                                      </Chip>
+                                    )}
+                                    {product.appearance?.color && (
+                                      <Chip
+                                        size="sm"
+                                        variant="flat"
+                                        color="warning"
+                                        className="text-xs"
+                                      >
+                                        {product.appearance.color}
+                                      </Chip>
                                     )}
                                   </div>
-                                  {product.keywords.length > 0 && (
-                                    <div className="flex flex-wrap gap-1">
-                                      {product.keywords
-                                        .slice(0, 2)
-                                        .map((keyword, index) => (
+
+                                  {/* 关键词 */}
+                                  {product.keywords &&
+                                    product.keywords.length > 0 && (
+                                      <div className="flex flex-wrap gap-1">
+                                        {product.keywords
+                                          .slice(0, 2)
+                                          .map((keyword, index) => (
+                                            <Chip
+                                              key={index}
+                                              size="sm"
+                                              variant="flat"
+                                              color={
+                                                isSelected
+                                                  ? "primary"
+                                                  : "default"
+                                              }
+                                              className="text-xs"
+                                            >
+                                              {keyword}
+                                            </Chip>
+                                          ))}
+                                        {product.keywords.length > 2 && (
                                           <Chip
-                                            key={index}
                                             size="sm"
                                             variant="flat"
                                             color={
@@ -1260,23 +1511,11 @@ function MatchingResultsPageContent() {
                                             }
                                             className="text-xs"
                                           >
-                                            {keyword}
+                                            +{product.keywords.length - 2}
                                           </Chip>
-                                        ))}
-                                      {product.keywords.length > 2 && (
-                                        <Chip
-                                          size="sm"
-                                          variant="flat"
-                                          color={
-                                            isSelected ? "primary" : "default"
-                                          }
-                                          className="text-xs"
-                                        >
-                                          +{product.keywords.length - 2}
-                                        </Chip>
-                                      )}
-                                    </div>
-                                  )}
+                                        )}
+                                      </div>
+                                    )}
                                 </div>
                               </CardBody>
                             </Card>

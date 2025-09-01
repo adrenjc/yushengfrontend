@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, Suspense } from "react"
+import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import {
   Card,
@@ -42,7 +43,17 @@ import {
   Package,
   Search,
 } from "lucide-react"
-import { EmptyState } from "@/components/ui/empty-state"
+// 动态导入以避免 hydration 错误
+const EmptyState = dynamic(
+  () =>
+    import("@/components/ui/empty-state").then(mod => ({
+      default: mod.EmptyState,
+    })),
+  {
+    ssr: false,
+    loading: () => <div>加载中...</div>,
+  }
+)
 import { useNotifications } from "@/stores/app"
 import { buildApiUrl } from "@/lib/api"
 import { getAuthHeaders } from "@/lib/auth"
@@ -54,16 +65,39 @@ interface MatchingRecord {
     price: number
     quantity: number
     unit: string
-    supplier: string
   }
   candidates: Array<{
     productId: {
       _id: string
       name: string
       brand: string
-      companyPrice: number
+      company: string
+      productType: string
+      packageType: string
+      specifications: {
+        circumference: number
+        length: string
+        packageQuantity: number
+      }
+      chemicalContent: {
+        tarContent: number
+        nicotineContent: number
+        carbonMonoxideContent: number
+      }
+      appearance: {
+        color: string
+      }
+      features: {
+        hasPop: boolean
+      }
+      pricing: {
+        priceCategory: string
+        retailPrice: number
+        unit: string
+        companyPrice: number
+      }
+      productCode: string
       boxCode: string
-      barcode: string
     }
     score: {
       name: number
@@ -190,15 +224,129 @@ function MatchingReviewPageContent() {
   const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set())
   const [batchLoading, setBatchLoading] = useState(false)
 
+  // 商品搜索状态
+  const [productSearchTerm, setProductSearchTerm] = useState("")
+  const [availableProducts, setAvailableProducts] = useState<any[]>([])
+  const [productSearchLoading, setProductSearchLoading] = useState(false)
+  const [selectedAlternativeProduct, setSelectedAlternativeProduct] =
+    useState<any>(null)
+
   // 模态框状态
   const {
     isOpen: isReviewOpen,
     onOpen: onReviewOpen,
     onClose: onReviewClose,
   } = useDisclosure()
+  const {
+    isOpen: isProductSearchOpen,
+    onOpen: onProductSearchOpen,
+    onClose: onProductSearchClose,
+  } = useDisclosure()
 
   // 通知系统
   const notifications = useNotifications()
+
+  // 搜索商品
+  const searchProducts = async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setAvailableProducts([])
+      return
+    }
+
+    try {
+      setProductSearchLoading(true)
+      const response = await fetch(
+        buildApiUrl(
+          `/products?search=${encodeURIComponent(searchTerm)}&limit=20`
+        ),
+        {
+          headers: getAuthHeaders(),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      setAvailableProducts(data.data.products)
+    } catch (error) {
+      console.error("❌ 搜索商品失败:", error)
+      notifications.error("搜索失败", "无法搜索商品")
+    } finally {
+      setProductSearchLoading(false)
+    }
+  }
+
+  // 选择替代商品
+  const selectAlternativeProduct = async (product: any) => {
+    // 如果是批量模式
+    if (selectedRecords.size > 0) {
+      try {
+        setBatchLoading(true)
+        const recordIds = Array.from(selectedRecords)
+        const productIds = recordIds.map(() => product._id)
+
+        const requestBody = {
+          recordIds,
+          action: "confirm",
+          productIds,
+          note: `批量匹配到: ${product.name}`,
+        }
+
+        const response = await fetch(
+          buildApiUrl("/matching/records/batch-review"),
+          {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(requestBody),
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const data = await response.json()
+        notifications.success(
+          "批量匹配完成",
+          `成功将 ${data.data.success.length} 条记录匹配到 ${product.name}`
+        )
+
+        setSelectedRecords(new Set())
+        await fetchReviews()
+        onProductSearchClose()
+      } catch (error) {
+        console.error("❌ 批量匹配失败:", error)
+        notifications.error("批量匹配失败", "无法完成批量匹配操作")
+      } finally {
+        setBatchLoading(false)
+      }
+    } else {
+      // 单个记录模式
+      setSelectedAlternativeProduct(product)
+      onProductSearchClose()
+    }
+  }
+
+  // 确认使用替代商品
+  const confirmAlternativeProduct = async () => {
+    if (!selectedRecord || !selectedAlternativeProduct) return
+
+    try {
+      setReviewLoading(true)
+      await reviewRecord(
+        selectedRecord._id,
+        "confirm",
+        selectedAlternativeProduct._id
+      )
+      setSelectedAlternativeProduct(null)
+    } catch (error) {
+      console.error("❌ 确认替代商品失败:", error)
+    } finally {
+      setReviewLoading(false)
+    }
+  }
 
   // 获取待审核任务列表
   const fetchTasks = async () => {
@@ -536,7 +684,7 @@ function MatchingReviewPageContent() {
   // 如果没有taskId，显示任务选择页面
   if (!taskId) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" suppressHydrationWarning>
         {/* 页面标题 */}
         <div className="flex items-center justify-between">
           <div>
@@ -732,7 +880,7 @@ function MatchingReviewPageContent() {
 
   // 有taskId，显示具体任务的审核界面
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" suppressHydrationWarning>
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
@@ -980,15 +1128,67 @@ function MatchingReviewPageContent() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {bestCandidate ? (
-                            <div>
-                              <p className="font-medium">
-                                {bestCandidate.productId.name}
+                          {bestCandidate && bestCandidate.productId ? (
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">
+                                {bestCandidate.productId.name || "未知商品"}
                               </p>
-                              <p className="text-xs text-default-500">
-                                {bestCandidate.productId.brand} | ¥
-                                {bestCandidate.productId.companyPrice}
-                              </p>
+                              <div className="flex flex-wrap gap-1 text-xs text-default-500">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="font-medium">
+                                    {bestCandidate.productId.brand ||
+                                      "未知品牌"}
+                                  </span>
+                                  <span>|</span>
+                                  <span>
+                                    {bestCandidate.productId.company ||
+                                      "未知企业"}
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 text-xs">
+                                {bestCandidate.productId.productType && (
+                                  <Chip
+                                    size="sm"
+                                    variant="flat"
+                                    color="primary"
+                                  >
+                                    {bestCandidate.productId.productType}
+                                  </Chip>
+                                )}
+                                {bestCandidate.productId.pricing
+                                  ?.priceCategory && (
+                                  <Chip
+                                    size="sm"
+                                    variant="flat"
+                                    color="secondary"
+                                  >
+                                    {
+                                      bestCandidate.productId.pricing
+                                        .priceCategory
+                                    }
+                                  </Chip>
+                                )}
+                                {bestCandidate.productId.features?.hasPop && (
+                                  <Chip
+                                    size="sm"
+                                    variant="flat"
+                                    color="success"
+                                  >
+                                    爆珠
+                                  </Chip>
+                                )}
+                              </div>
+                              <div className="text-xs font-medium text-primary">
+                                公司价: ¥
+                                {bestCandidate.productId.pricing
+                                  ?.companyPrice ||
+                                  bestCandidate.productId.pricing
+                                    ?.retailPrice ||
+                                  0}
+                                {bestCandidate.productId.pricing?.unit &&
+                                  ` / ${bestCandidate.productId.pricing.unit}`}
+                              </div>
                             </div>
                           ) : (
                             <span className="text-default-400">无匹配</span>
@@ -1109,7 +1309,7 @@ function MatchingReviewPageContent() {
                     </h4>
                   </CardHeader>
                   <CardBody>
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-3">
                       <div>
                         <p className="text-sm text-default-500">商品名称</p>
                         <p className="font-medium">
@@ -1127,12 +1327,6 @@ function MatchingReviewPageContent() {
                         <p className="font-medium">
                           {selectedRecord.originalData.quantity}{" "}
                           {selectedRecord.originalData.unit}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-default-500">供应商</p>
-                        <p className="font-medium">
-                          {selectedRecord.originalData.supplier || "未知"}
                         </p>
                       </div>
                     </div>
@@ -1165,14 +1359,79 @@ function MatchingReviewPageContent() {
                                   >
                                     <div></div>
                                   </Badge>
-                                  <div>
+                                  <div className="flex-1">
                                     <p className="font-medium">
-                                      {candidate.productId.name}
+                                      {candidate.productId?.name || "未知商品"}
                                     </p>
-                                    <p className="text-sm text-default-500">
-                                      {candidate.productId.brand} | ¥
-                                      {candidate.productId.companyPrice}
-                                    </p>
+                                    <div className="flex flex-wrap gap-2 text-sm text-default-500">
+                                      <span>
+                                        {candidate.productId?.brand ||
+                                          "未知品牌"}
+                                      </span>
+                                      <span>|</span>
+                                      <span>
+                                        {candidate.productId?.company ||
+                                          "未知企业"}
+                                      </span>
+                                      <span>|</span>
+                                      <span>
+                                        {candidate.productId?.productType ||
+                                          "未知类型"}
+                                      </span>
+                                      <span>|</span>
+                                      <span>
+                                        ¥
+                                        {candidate.productId?.pricing
+                                          ?.companyPrice ||
+                                          candidate.productId?.pricing
+                                            ?.retailPrice ||
+                                          0}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                      {candidate.productId?.pricing
+                                        ?.priceCategory && (
+                                        <Chip
+                                          size="sm"
+                                          variant="flat"
+                                          color="primary"
+                                        >
+                                          {
+                                            candidate.productId.pricing
+                                              .priceCategory
+                                          }
+                                        </Chip>
+                                      )}
+                                      {candidate.productId?.packageType && (
+                                        <Chip
+                                          size="sm"
+                                          variant="flat"
+                                          color="secondary"
+                                        >
+                                          {candidate.productId.packageType}
+                                        </Chip>
+                                      )}
+                                      {candidate.productId?.features
+                                        ?.hasPop && (
+                                        <Chip
+                                          size="sm"
+                                          variant="flat"
+                                          color="success"
+                                        >
+                                          爆珠
+                                        </Chip>
+                                      )}
+                                      {candidate.productId?.appearance
+                                        ?.color && (
+                                        <Chip
+                                          size="sm"
+                                          variant="flat"
+                                          color="default"
+                                        >
+                                          {candidate.productId.appearance.color}
+                                        </Chip>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-3">
@@ -1233,16 +1492,7 @@ function MatchingReviewPageContent() {
                                       {candidate.score.package}%
                                     </span>
                                   </div>
-                                  <div className="flex justify-between">
-                                    <span>价格匹配</span>
-                                    <span
-                                      className={getScoreColor(
-                                        candidate.score.price
-                                      )}
-                                    >
-                                      {candidate.score.price}%
-                                    </span>
-                                  </div>
+
                                   <div className="flex justify-between font-bold">
                                     <span>综合得分</span>
                                     <span
@@ -1264,23 +1514,210 @@ function MatchingReviewPageContent() {
 
                               {/* 商品详情 */}
                               <div>
-                                <h5 className="mb-2 font-medium">商品详情</h5>
-                                <div className="grid gap-2 text-sm md:grid-cols-2">
+                                <h5 className="mb-3 font-medium">商品详情</h5>
+                                <div className="space-y-3">
+                                  {/* 基本信息 */}
                                   <div>
-                                    <span className="text-default-500">
-                                      盒码:{" "}
-                                    </span>
-                                    <span>
-                                      {candidate.productId.boxCode || "无"}
-                                    </span>
+                                    <h6 className="mb-2 text-sm font-medium text-default-600">
+                                      基本信息
+                                    </h6>
+                                    <div className="grid gap-2 text-sm md:grid-cols-2">
+                                      <div>
+                                        <span className="text-default-500">
+                                          产品编码:{" "}
+                                        </span>
+                                        <span>
+                                          {candidate.productId?.productCode ||
+                                            "无"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-default-500">
+                                          盒码:{" "}
+                                        </span>
+                                        <span>
+                                          {candidate.productId?.boxCode || "无"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-default-500">
+                                          包装类型:{" "}
+                                        </span>
+                                        <span>
+                                          {candidate.productId?.packageType ||
+                                            "无"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-default-500">
+                                          颜色:{" "}
+                                        </span>
+                                        <span>
+                                          {candidate.productId?.appearance
+                                            ?.color || "无"}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
+
+                                  {/* 物理规格 */}
+                                  {candidate.productId?.specifications && (
+                                    <div>
+                                      <h6 className="mb-2 text-sm font-medium text-default-600">
+                                        物理规格
+                                      </h6>
+                                      <div className="grid gap-2 text-sm md:grid-cols-3">
+                                        {candidate.productId?.specifications
+                                          ?.circumference && (
+                                          <div>
+                                            <span className="text-default-500">
+                                              周长:{" "}
+                                            </span>
+                                            <span>
+                                              {
+                                                candidate.productId
+                                                  ?.specifications
+                                                  ?.circumference
+                                              }
+                                              mm
+                                            </span>
+                                          </div>
+                                        )}
+                                        {candidate.productId?.specifications
+                                          ?.length && (
+                                          <div>
+                                            <span className="text-default-500">
+                                              长度:{" "}
+                                            </span>
+                                            <span>
+                                              {
+                                                candidate.productId
+                                                  ?.specifications?.length
+                                              }
+                                            </span>
+                                          </div>
+                                        )}
+                                        {candidate.productId?.specifications
+                                          ?.packageQuantity && (
+                                          <div>
+                                            <span className="text-default-500">
+                                              包装数量:{" "}
+                                            </span>
+                                            <span>
+                                              {
+                                                candidate.productId
+                                                  ?.specifications
+                                                  ?.packageQuantity
+                                              }
+                                              支
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* 化学成分 */}
+                                  {candidate.productId?.chemicalContent && (
+                                    <div>
+                                      <h6 className="mb-2 text-sm font-medium text-default-600">
+                                        化学成分
+                                      </h6>
+                                      <div className="grid gap-2 text-sm md:grid-cols-3">
+                                        {candidate.productId?.chemicalContent
+                                          ?.tarContent !== undefined && (
+                                          <div>
+                                            <span className="text-default-500">
+                                              焦油:{" "}
+                                            </span>
+                                            <span>
+                                              {
+                                                candidate.productId
+                                                  ?.chemicalContent?.tarContent
+                                              }
+                                              mg
+                                            </span>
+                                          </div>
+                                        )}
+                                        {candidate.productId?.chemicalContent
+                                          ?.nicotineContent !== undefined && (
+                                          <div>
+                                            <span className="text-default-500">
+                                              烟碱:{" "}
+                                            </span>
+                                            <span>
+                                              {
+                                                candidate.productId
+                                                  ?.chemicalContent
+                                                  ?.nicotineContent
+                                              }
+                                              mg
+                                            </span>
+                                          </div>
+                                        )}
+                                        {candidate.productId?.chemicalContent
+                                          ?.carbonMonoxideContent !==
+                                          undefined && (
+                                          <div>
+                                            <span className="text-default-500">
+                                              一氧化碳:{" "}
+                                            </span>
+                                            <span>
+                                              {
+                                                candidate.productId
+                                                  ?.chemicalContent
+                                                  ?.carbonMonoxideContent
+                                              }
+                                              mg
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* 价格信息 */}
                                   <div>
-                                    <span className="text-default-500">
-                                      条码:{" "}
-                                    </span>
-                                    <span>
-                                      {candidate.productId.barcode || "无"}
-                                    </span>
+                                    <h6 className="mb-2 text-sm font-medium text-default-600">
+                                      价格信息
+                                    </h6>
+                                    <div className="grid gap-2 text-sm md:grid-cols-2">
+                                      <div>
+                                        <span className="text-default-500">
+                                          价格类型:{" "}
+                                        </span>
+                                        <span>
+                                          {candidate.productId?.pricing
+                                            ?.priceCategory || "无"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-default-500">
+                                          公司价:{" "}
+                                        </span>
+                                        <span className="font-medium text-primary">
+                                          ¥
+                                          {candidate.productId?.pricing
+                                            ?.companyPrice || 0}{" "}
+                                          /{" "}
+                                          {candidate.productId?.pricing?.unit ||
+                                            "条"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-default-500">
+                                          零售价:{" "}
+                                        </span>
+                                        <span className="text-sm text-default-400">
+                                          ¥
+                                          {candidate.productId?.pricing
+                                            ?.retailPrice || 0}{" "}
+                                          /{" "}
+                                          {candidate.productId?.pricing?.unit ||
+                                            "条"}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1298,7 +1735,7 @@ function MatchingReviewPageContent() {
                                     reviewRecord(
                                       selectedRecord._id,
                                       "confirm",
-                                      candidate.productId._id
+                                      candidate.productId?._id
                                     )
                                   }
                                   isLoading={reviewLoading}
@@ -1375,38 +1812,253 @@ function MatchingReviewPageContent() {
               </div>
             </ModalBody>
             <ModalFooter>
-              <Button variant="light" onPress={onReviewClose}>
-                取消
-              </Button>
-              <Button
-                color="danger"
-                variant="flat"
-                startContent={<XCircle className="h-4 w-4" />}
-                onPress={() => reviewRecord(selectedRecord._id, "reject")}
-                isLoading={reviewLoading}
-              >
-                拒绝匹配
-              </Button>
-              {selectedRecord.candidates.length > 0 && (
-                <Button
-                  color="success"
-                  startContent={<CheckCircle className="h-4 w-4" />}
-                  onPress={() =>
-                    reviewRecord(
-                      selectedRecord._id,
-                      "confirm",
-                      selectedRecord.candidates[0].productId._id
-                    )
-                  }
-                  isLoading={reviewLoading}
-                >
-                  确认最佳匹配
-                </Button>
-              )}
+              <div className="flex w-full items-center justify-between">
+                <div className="flex gap-2">
+                  <Button variant="light" onPress={onReviewClose}>
+                    取消
+                  </Button>
+                  {selectedAlternativeProduct && (
+                    <Button
+                      color="warning"
+                      variant="flat"
+                      onPress={() => setSelectedAlternativeProduct(null)}
+                    >
+                      取消选择
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    color="primary"
+                    variant="flat"
+                    startContent={<Search className="h-4 w-4" />}
+                    onPress={() => {
+                      setProductSearchTerm("")
+                      setAvailableProducts([])
+                      onProductSearchOpen()
+                    }}
+                  >
+                    手动选择商品
+                  </Button>
+                  <Button
+                    color="danger"
+                    variant="flat"
+                    startContent={<XCircle className="h-4 w-4" />}
+                    onPress={() => reviewRecord(selectedRecord._id, "reject")}
+                    isLoading={reviewLoading}
+                  >
+                    拒绝匹配
+                  </Button>
+                  {(selectedAlternativeProduct ||
+                    selectedRecord.candidates.length > 0) && (
+                    <Button
+                      color="success"
+                      startContent={<CheckCircle className="h-4 w-4" />}
+                      onPress={
+                        selectedAlternativeProduct
+                          ? confirmAlternativeProduct
+                          : () =>
+                              reviewRecord(
+                                selectedRecord._id,
+                                "confirm",
+                                selectedRecord.candidates[0]?.productId?._id
+                              )
+                      }
+                      isLoading={reviewLoading}
+                    >
+                      {selectedAlternativeProduct
+                        ? `确认选择: ${selectedAlternativeProduct.name}`
+                        : "确认最佳匹配"}
+                    </Button>
+                  )}
+                </div>
+              </div>
             </ModalFooter>
           </ModalContent>
         </Modal>
       )}
+
+      {/* 商品搜索模态框 */}
+      <Modal
+        isOpen={isProductSearchOpen}
+        onClose={onProductSearchClose}
+        size="4xl"
+        scrollBehavior="inside"
+      >
+        <ModalContent>
+          <ModalHeader>
+            <div>
+              <h3>
+                {selectedRecords.size > 0
+                  ? `批量手动匹配 (${selectedRecords.size} 条记录)`
+                  : "选择正确的商品"}
+              </h3>
+              <p className="text-sm text-default-500">
+                {selectedRecords.size > 0
+                  ? "选择一个商品将应用于所有选中的记录"
+                  : `当前匹配: ${selectedRecord?.originalData.name}`}
+              </p>
+            </div>
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              {/* 搜索框 */}
+              <Input
+                placeholder="搜索商品名称、品牌、企业、盒码或关键词..."
+                value={productSearchTerm}
+                onChange={e => {
+                  setProductSearchTerm(e.target.value)
+                  searchProducts(e.target.value)
+                }}
+                startContent={<Search className="h-4 w-4" />}
+                isClearable
+                onClear={() => {
+                  setProductSearchTerm("")
+                  setAvailableProducts([])
+                }}
+              />
+
+              {/* 搜索结果 */}
+              {productSearchLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-b-2 border-primary"></div>
+                    <p>搜索中...</p>
+                  </div>
+                </div>
+              ) : availableProducts.length > 0 ? (
+                <div className="space-y-3">
+                  <h4 className="font-medium">
+                    搜索结果 ({availableProducts.length})
+                  </h4>
+                  <div className="max-h-96 space-y-2 overflow-y-auto">
+                    {availableProducts.map(product => (
+                      <Card
+                        key={product._id}
+                        isPressable
+                        isHoverable
+                        onPress={() => selectAlternativeProduct(product)}
+                        className="p-3"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="font-medium">{product.name}</p>
+                              <div className="flex flex-wrap gap-2 text-sm text-default-500">
+                                <span>{product.brand}</span>
+                                <span>|</span>
+                                <span>{product.company}</span>
+                                <span>|</span>
+                                <span>{product.productType}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium text-success">
+                                ¥
+                                {product.pricing?.retailPrice ||
+                                  product.pricing?.companyPrice ||
+                                  0}
+                              </p>
+                              <p className="text-xs text-default-500">
+                                {product.pricing?.unit || "元/条"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1">
+                            <Chip size="sm" variant="flat" color="primary">
+                              {product.pricing?.priceCategory}
+                            </Chip>
+                            <Chip size="sm" variant="flat" color="secondary">
+                              {product.packageType}
+                            </Chip>
+                            {product.features?.hasPop && (
+                              <Chip size="sm" variant="flat" color="success">
+                                爆珠
+                              </Chip>
+                            )}
+                            {product.appearance?.color && (
+                              <Chip size="sm" variant="flat" color="default">
+                                {product.appearance.color}
+                              </Chip>
+                            )}
+                          </div>
+
+                          {/* 详细信息 */}
+                          <div className="grid gap-2 text-xs text-default-500 md:grid-cols-2">
+                            {product.productCode && (
+                              <div>
+                                <span>产品编码: </span>
+                                <span>{product.productCode}</span>
+                              </div>
+                            )}
+                            {product.boxCode && (
+                              <div>
+                                <span>盒码: </span>
+                                <span>{product.boxCode}</span>
+                              </div>
+                            )}
+                            {product.specifications?.circumference && (
+                              <div>
+                                <span>周长: </span>
+                                <span>
+                                  {product.specifications.circumference}mm
+                                </span>
+                              </div>
+                            )}
+                            {product.specifications?.length && (
+                              <div>
+                                <span>长度: </span>
+                                <span>{product.specifications.length}</span>
+                              </div>
+                            )}
+                            {product.chemicalContent?.tarContent !==
+                              undefined && (
+                              <div>
+                                <span>焦油: </span>
+                                <span>
+                                  {product.chemicalContent.tarContent}mg
+                                </span>
+                              </div>
+                            )}
+                            {product.chemicalContent?.nicotineContent !==
+                              undefined && (
+                              <div>
+                                <span>烟碱: </span>
+                                <span>
+                                  {product.chemicalContent.nicotineContent}mg
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ) : productSearchTerm.length > 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-default-500">未找到匹配的商品</p>
+                  <p className="text-sm text-default-400">请尝试其他关键词</p>
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <Search className="mx-auto h-12 w-12 text-default-300" />
+                  <p className="mt-2 text-default-500">输入关键词搜索商品</p>
+                  <p className="text-sm text-default-400">
+                    支持商品名称、品牌、企业、盒码等
+                  </p>
+                </div>
+              )}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={onProductSearchClose}>
+              取消
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   )
 }

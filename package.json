@@ -4,11 +4,10 @@
   "description": "智能商品匹配系统前端",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "start": "next dev",
     "build": "next build",
     "build:static": "npm run clean && next build",
     "build:prod": "npm run clean && cross-env NODE_ENV=production next build",
-    "start": "npx serve@latest out -p 3000",
     "start:dev": "next dev",
     "start:static": "npx serve@latest out -p 3000",
     "lint": "next lint",
@@ -40,6 +39,7 @@
     "recharts": "^2.12.7",
     "swr": "^2.2.5",
     "tailwind-merge": "^2.5.2",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8",
     "zustand": "^4.5.5"
   },

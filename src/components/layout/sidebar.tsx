@@ -18,6 +18,7 @@ import { useAuthStore } from "@/stores/auth"
 import { useAppStore, useNotifications } from "@/stores/app"
 import { ROUTES } from "@/constants"
 import { cn } from "@/lib/utils"
+
 import type { NavItem } from "@/types"
 
 const navigationItems: NavItem[] = [
@@ -44,14 +45,12 @@ const navigationItems: NavItem[] = [
     label: "智能匹配",
     href: ROUTES.MATCHING,
     icon: <RefreshCw className="h-5 w-5" />,
-    badge: "New",
   },
   {
     key: "review",
     label: "审核中心",
     href: "/dashboard/matching/review",
     icon: <ClipboardCheck className="h-5 w-5" />,
-    badge: 5, // 示例：5个待审核项目
   },
   // {
   //   key: "prices",

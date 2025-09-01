@@ -204,7 +204,17 @@ export default function TemplatesPage() {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        // 尝试解析后端返回的错误信息
+        let errorMessage = "无法获取模板列表"
+        try {
+          const errorData = await response.json()
+          if (errorData.message) {
+            errorMessage = errorData.message
+          }
+        } catch (parseError) {
+          console.warn("无法解析错误响应:", parseError)
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -212,7 +222,10 @@ export default function TemplatesPage() {
       setTotal(data.data.pagination.total || 0)
     } catch (error) {
       console.error("❌ 获取模板列表失败:", error)
-      notifications.error("加载失败", "无法获取模板列表")
+      notifications.error(
+        "加载失败",
+        (error as Error).message || "无法获取模板列表"
+      )
     } finally {
       setLoading(false)
     }
@@ -234,7 +247,17 @@ export default function TemplatesPage() {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        // 尝试解析后端返回的错误信息
+        let errorMessage = "无法创建模板"
+        try {
+          const errorData = await response.json()
+          if (errorData.message) {
+            errorMessage = errorData.message
+          }
+        } catch (parseError) {
+          console.warn("无法解析错误响应:", parseError)
+        }
+        throw new Error(errorMessage)
       }
 
       notifications.success("创建成功", "模板已创建")
@@ -243,7 +266,10 @@ export default function TemplatesPage() {
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 创建模板失败:", error)
-      notifications.error("创建失败", "无法创建模板")
+      notifications.error(
+        "创建失败",
+        (error as Error).message || "无法创建模板"
+      )
     } finally {
       setSubmitLoading(false)
     }
@@ -267,7 +293,17 @@ export default function TemplatesPage() {
       )
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        // 尝试解析后端返回的错误信息
+        let errorMessage = "无法更新模板"
+        try {
+          const errorData = await response.json()
+          if (errorData.message) {
+            errorMessage = errorData.message
+          }
+        } catch (parseError) {
+          console.warn("无法解析错误响应:", parseError)
+        }
+        throw new Error(errorMessage)
       }
 
       notifications.success("更新成功", "模板已更新")
@@ -277,7 +313,10 @@ export default function TemplatesPage() {
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 更新模板失败:", error)
-      notifications.error("更新失败", "无法更新模板")
+      notifications.error(
+        "更新失败",
+        (error as Error).message || "无法更新模板"
+      )
     } finally {
       setSubmitLoading(false)
     }
@@ -298,7 +337,17 @@ export default function TemplatesPage() {
       )
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        // 尝试解析后端返回的错误信息
+        let errorMessage = "无法删除模板"
+        try {
+          const errorData = await response.json()
+          if (errorData.message) {
+            errorMessage = errorData.message
+          }
+        } catch (parseError) {
+          console.warn("无法解析错误响应:", parseError)
+        }
+        throw new Error(errorMessage)
       }
 
       notifications.success("删除成功", "模板已删除")
@@ -307,7 +356,10 @@ export default function TemplatesPage() {
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 删除模板失败:", error)
-      notifications.error("删除失败", "无法删除模板")
+      notifications.error(
+        "删除失败",
+        (error as Error).message || "无法删除模板"
+      )
     } finally {
       setSubmitLoading(false)
     }
@@ -332,7 +384,17 @@ export default function TemplatesPage() {
       )
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        // 尝试解析后端返回的错误信息
+        let errorMessage = "无法复制模板"
+        try {
+          const errorData = await response.json()
+          if (errorData.message) {
+            errorMessage = errorData.message
+          }
+        } catch (parseError) {
+          console.warn("无法解析错误响应:", parseError)
+        }
+        throw new Error(errorMessage)
       }
 
       notifications.success("复制成功", "模板已复制")
@@ -342,7 +404,10 @@ export default function TemplatesPage() {
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 复制模板失败:", error)
-      notifications.error("复制失败", "无法复制模板")
+      notifications.error(
+        "复制失败",
+        (error as Error).message || "无法复制模板"
+      )
     } finally {
       setSubmitLoading(false)
     }
@@ -360,14 +425,27 @@ export default function TemplatesPage() {
       )
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        // 尝试解析后端返回的错误信息
+        let errorMessage = "无法设置默认模板"
+        try {
+          const errorData = await response.json()
+          if (errorData.message) {
+            errorMessage = errorData.message
+          }
+        } catch (parseError) {
+          console.warn("无法解析错误响应:", parseError)
+        }
+        throw new Error(errorMessage)
       }
 
       notifications.success("设置成功", `${template.name} 已设为默认模板`)
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 设置默认模板失败:", error)
-      notifications.error("设置失败", "无法设置默认模板")
+      notifications.error(
+        "设置失败",
+        (error as Error).message || "无法设置默认模板"
+      )
     }
   }
 

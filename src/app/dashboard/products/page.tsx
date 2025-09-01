@@ -1,6 +1,13 @@
 "use client"
 
-import { useState, useEffect, useMemo, createContext, useContext } from "react"
+import {
+  useState,
+  useEffect,
+  useMemo,
+  createContext,
+  useContext,
+  useRef,
+} from "react"
 import dynamic from "next/dynamic"
 import {
   Card,
@@ -40,8 +47,7 @@ import {
   Plus,
   Upload,
   Download,
-  Eye,
-  Edit,
+  Edit2,
   Trash2,
   MoreVertical,
   RefreshCw,
@@ -51,8 +57,22 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react"
-import { FileUpload } from "@/components/ui/file-upload"
+// 动态导入以避免 hydration 错误
+const RealProgressUpload = dynamic(
+  () =>
+    import("@/components/ui/real-progress-upload").then(mod => ({
+      default: mod.RealProgressUpload,
+    })),
+  {
+    ssr: false,
+    loading: () => <div>加载中...</div>,
+  }
+)
 import { ConfirmModal } from "@/components/ui/confirm-modal"
+import { ProductForm } from "@/components/product"
+import ProductSearchBar, {
+  SearchFilters,
+} from "@/components/product/product-search-bar"
 // 动态导入 EmptyState 以避免 hydration 错误
 const EmptyState = dynamic(
   () =>
@@ -84,10 +104,39 @@ interface Product {
   _id: string
   templateId: string
   name: string
-  boxCode: string
-  barcode: string
-  companyPrice: number
   brand: string
+  productCode?: string
+  boxCode?: string
+  productType?: string
+  packageType?: string
+  specifications?: {
+    circumference?: number
+    length?: string
+    packageQuantity?: number
+  }
+  launchDate?: string
+  chemicalContent?: {
+    tarContent?: number
+    nicotineContent?: number
+    carbonMonoxideContent?: number
+  }
+  appearance?: {
+    color?: string
+  }
+  company?: string
+  features?: {
+    hasPop?: boolean
+  }
+  pricing?: {
+    priceCategory?: string
+    retailPrice?: number
+    unit?: string
+    companyPrice?: number
+  }
+  wholesale?: {
+    name?: string
+    price?: number
+  }
   category?: string
   keywords: string[]
   isActive: boolean
@@ -123,151 +172,19 @@ interface ProductsResponse {
   }
 }
 
-// 商品表单组件
-interface ProductFormProps {
-  product?: Product | null
-  onSubmit: (data: any) => void
-  onCancel: () => void
-  isLoading?: boolean
-}
-
-function ProductForm({
-  product,
-  onSubmit,
-  onCancel,
-  isLoading = false,
-}: ProductFormProps) {
-  // 从父组件获取selectedTemplateId
-  const selectedTemplateId = useContext(TemplateContext) || ""
-  const [formData, setFormData] = useState({
-    name: product?.name || "",
-    brand: product?.brand || "",
-    category: product?.category || "",
-    companyPrice: product?.companyPrice || 0,
-    boxCode: product?.boxCode || "",
-    barcode: product?.barcode || "",
-    keywords: product?.keywords?.join(", ") || "",
-    isActive: product?.isActive ?? true,
-  })
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // 验证必填字段
-    if (!formData.name.trim()) {
-      return
-    }
-    if (!formData.brand.trim()) {
-      return
-    }
-
-    // 处理关键词
-    const keywords = formData.keywords
-      .split(",")
-      .map(k => k.trim())
-      .filter(k => k.length > 0)
-
-    const submitData = {
-      ...formData,
-      templateId: selectedTemplateId,
-      keywords,
-      companyPrice: Number(formData.companyPrice) || 0,
-    }
-
-    onSubmit(submitData)
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Input
-          label="商品名称"
-          placeholder="输入商品名称"
-          value={formData.name}
-          onChange={e => setFormData({ ...formData, name: e.target.value })}
-          isRequired
-        />
-        <Input
-          label="品牌"
-          placeholder="输入品牌"
-          value={formData.brand}
-          onChange={e => setFormData({ ...formData, brand: e.target.value })}
-          isRequired
-        />
-        <Input
-          label="分类"
-          placeholder="输入分类"
-          value={formData.category}
-          onChange={e => setFormData({ ...formData, category: e.target.value })}
-        />
-        <Input
-          label="公司价"
-          type="number"
-          placeholder="0.00"
-          value={formData.companyPrice.toString()}
-          onChange={e =>
-            setFormData({ ...formData, companyPrice: Number(e.target.value) })
-          }
-          startContent={<span className="text-default-400">¥</span>}
-        />
-        <Input
-          label="盒码"
-          placeholder="输入盒码"
-          value={formData.boxCode}
-          onChange={e => setFormData({ ...formData, boxCode: e.target.value })}
-        />
-        <Input
-          label="条码"
-          placeholder="输入条码"
-          value={formData.barcode}
-          onChange={e => setFormData({ ...formData, barcode: e.target.value })}
-        />
-      </div>
-
-      <Textarea
-        label="关键词"
-        placeholder="多个关键词用逗号分隔"
-        value={formData.keywords}
-        onChange={e => setFormData({ ...formData, keywords: e.target.value })}
-        rows={3}
-      />
-
-      <Checkbox
-        isSelected={formData.isActive}
-        onValueChange={checked =>
-          setFormData({ ...formData, isActive: checked })
-        }
-      >
-        启用商品
-      </Checkbox>
-
-      <Divider />
-
-      <div className="flex justify-end gap-2">
-        <Button variant="light" onPress={onCancel}>
-          取消
-        </Button>
-        <Button color="primary" type="submit" isLoading={isLoading}>
-          {product ? "更新" : "创建"}
-        </Button>
-      </div>
-    </form>
-  )
-}
-
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(10) // 默认10条，改为可变
   const [total, setTotal] = useState(0)
-  const [search, setSearch] = useState("")
+
+  const [filters, setFilters] = useState({})
   const [selectedKeys, setSelectedKeys] = useState(new Set<string>())
   const [batchLoading, setBatchLoading] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [allProductIds, setAllProductIds] = useState<string[]>([])
   const [allIdsLoading, setAllIdsLoading] = useState(false)
-  const [isClient, setIsClient] = useState(false)
 
   // 模板相关状态
   const [templates, setTemplates] = useState<ProductTemplate[]>([])
@@ -284,6 +201,23 @@ export default function ProductsPage() {
 
   // 通知系统
   const notifications = useNotifications()
+
+  // useEffect hooks - 必须在组件顶部
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
+
+  useEffect(() => {
+    if (selectedTemplateId) {
+      fetchProducts()
+    }
+  }, [page, limit, selectedTemplateId])
+
+  useEffect(() => {
+    if (selectedTemplateId) {
+      fetchAllProductIds()
+    }
+  }, [selectedTemplateId])
 
   // 模态框状态
   const {
@@ -373,6 +307,72 @@ export default function ProductsPage() {
     }
   }
 
+  // 带filters参数的数据获取函数
+  const fetchProductsWithFilters = async (searchFilters: any = {}) => {
+    if (!selectedTemplateId) {
+      setLoading(false)
+      return
+    }
+
+    try {
+      setLoading(true)
+      console.log(
+        `🔥 获取产品数据 - 页码: ${page}, 模板: ${selectedTemplateId}, 过滤器:`,
+        searchFilters
+      )
+
+      // 使用统一的API配置
+      const baseUrl = buildApiUrl(API_ROUTES.PRODUCTS.LIST)
+      const url = new URL(baseUrl)
+      url.searchParams.set("templateId", selectedTemplateId)
+      url.searchParams.set("page", page.toString())
+      url.searchParams.set("limit", limit.toString())
+
+      // 添加过滤器参数
+      Object.entries(searchFilters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          if (typeof value === "object" && !Array.isArray(value)) {
+            // 处理范围类型的过滤器
+            Object.entries(value).forEach(([subKey, subValue]) => {
+              if (subValue !== undefined && subValue !== null) {
+                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+              }
+            })
+          } else {
+            url.searchParams.set(key, value.toString())
+          }
+        }
+      })
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: getAuthHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data: ProductsResponse = await response.json()
+      setProducts(data.data.products)
+      setTotal(data.data.pagination.total)
+      console.log("✅ 产品数据获取成功", {
+        count: data.data.products.length,
+        total: data.data.pagination.total,
+      })
+    } catch (error) {
+      console.error("❌ 产品数据获取失败:", error)
+      notifications.error(
+        "获取产品数据失败",
+        error instanceof Error ? error.message : "未知错误"
+      )
+      setProducts([])
+      setTotal(0)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // 简单直接的数据获取函数
   const fetchProducts = async () => {
     if (!selectedTemplateId) {
@@ -383,7 +383,8 @@ export default function ProductsPage() {
     try {
       setLoading(true)
       console.log(
-        `🔥 获取产品数据 - 页码: ${page}, 搜索: ${search}, 模板: ${selectedTemplateId}`
+        `🔥 获取产品数据 - 页码: ${page}, 模板: ${selectedTemplateId}, 过滤器:`,
+        filters
       )
 
       // 使用统一的API配置
@@ -392,7 +393,22 @@ export default function ProductsPage() {
       url.searchParams.set("templateId", selectedTemplateId)
       url.searchParams.set("page", page.toString())
       url.searchParams.set("limit", limit.toString())
-      if (search) url.searchParams.set("search", search)
+
+      // 添加过滤器参数
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          if (typeof value === "object" && !Array.isArray(value)) {
+            // 处理范围类型的过滤器
+            Object.entries(value).forEach(([subKey, subValue]) => {
+              if (subValue !== undefined && subValue !== null) {
+                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+              }
+            })
+          } else {
+            url.searchParams.set(key, value.toString())
+          }
+        }
+      })
 
       console.log(`🔗 请求URL: ${url.toString()}`)
 
@@ -446,6 +462,7 @@ export default function ProductsPage() {
       notifications.success("删除成功", "商品已成功删除")
       if (selectedTemplateId) {
         await fetchProducts() // 重新获取数据
+        await fetchAllProductIds() // 更新全选商品数量
       }
     } catch (error) {
       console.error("❌ 产品删除失败:", error)
@@ -460,12 +477,16 @@ export default function ProductsPage() {
   const batchDeleteProducts = async (ids: string[]) => {
     try {
       setBatchLoading(true)
+
       const response = await fetch(
         buildApiUrl(API_ROUTES.PRODUCTS.HARD_DELETE),
         {
           method: "POST",
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ids }),
+          body: JSON.stringify({
+            ids: ids,
+            templateId: selectedTemplateId,
+          }),
         }
       )
 
@@ -478,6 +499,7 @@ export default function ProductsPage() {
       setSelectedKeys(new Set()) // 清空选择
       if (selectedTemplateId) {
         await fetchProducts() // 重新获取数据
+        await fetchAllProductIds() // 更新全选商品数量
       }
     } catch (error) {
       console.error("❌ 批量删除失败:", error)
@@ -495,10 +517,15 @@ export default function ProductsPage() {
     try {
       setBatchLoading(true)
       const ids = Array.from(selectedKeys)
+
       const response = await fetch(buildApiUrl(API_ROUTES.PRODUCTS.BATCH), {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ ids, action }),
+        body: JSON.stringify({
+          operation: action,
+          productIds: ids,
+          templateId: selectedTemplateId,
+        }),
       })
 
       if (!response.ok) {
@@ -514,6 +541,7 @@ export default function ProductsPage() {
       setSelectedKeys(new Set()) // 清空选择
       if (selectedTemplateId) {
         await fetchProducts() // 重新获取数据
+        await fetchAllProductIds() // 更新全选商品数量
       }
     } catch (error) {
       const actionText = action === "activate" ? "启用" : "禁用"
@@ -551,6 +579,7 @@ export default function ProductsPage() {
       onEditClose()
       if (selectedTemplateId) {
         await fetchProducts() // 重新获取数据
+        await fetchAllProductIds() // 更新全选商品数量
       }
     } catch (error) {
       console.error("❌ 商品更新失败:", error)
@@ -581,6 +610,7 @@ export default function ProductsPage() {
       onCreateClose()
       if (selectedTemplateId) {
         await fetchProducts() // 重新获取数据
+        await fetchAllProductIds() // 更新全选商品数量
       }
     } catch (error) {
       console.error("❌ 商品创建失败:", error)
@@ -588,6 +618,58 @@ export default function ProductsPage() {
         "创建失败",
         error instanceof Error ? error.message : "未知错误"
       )
+    }
+  }
+
+  // 带filters参数的获取所有商品ID函数
+  const fetchAllProductIdsWithFilters = async (searchFilters: any = {}) => {
+    if (!selectedTemplateId) {
+      setAllProductIds([])
+      return
+    }
+
+    try {
+      setAllIdsLoading(true)
+
+      const baseUrl = buildApiUrl(API_ROUTES.PRODUCTS.ALL_IDS)
+      const url = new URL(baseUrl)
+      url.searchParams.set("templateId", selectedTemplateId)
+
+      // 添加过滤器参数
+      Object.entries(searchFilters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          if (typeof value === "object" && !Array.isArray(value)) {
+            // 处理范围类型的过滤器
+            Object.entries(value).forEach(([subKey, subValue]) => {
+              if (subValue !== undefined && subValue !== null) {
+                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+              }
+            })
+          } else {
+            url.searchParams.set(key, value.toString())
+          }
+        }
+      })
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: getAuthHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      setAllProductIds(data.data?.ids || [])
+      console.log("✅ 商品ID获取成功", {
+        count: data.data?.ids?.length || 0,
+      })
+    } catch (error) {
+      console.error("❌ 商品ID获取失败:", error)
+      setAllProductIds([])
+    } finally {
+      setAllIdsLoading(false)
     }
   }
 
@@ -604,7 +686,22 @@ export default function ProductsPage() {
       const baseUrl = buildApiUrl(API_ROUTES.PRODUCTS.ALL_IDS)
       const url = new URL(baseUrl)
       url.searchParams.set("templateId", selectedTemplateId)
-      if (search) url.searchParams.set("search", search)
+
+      // 添加过滤器参数
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          if (typeof value === "object" && !Array.isArray(value)) {
+            // 处理范围类型的过滤器
+            Object.entries(value).forEach(([subKey, subValue]) => {
+              if (subValue !== undefined && subValue !== null) {
+                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+              }
+            })
+          } else {
+            url.searchParams.set(key, value.toString())
+          }
+        }
+      })
 
       const response = await fetch(url.toString(), {
         headers: getAuthHeaders(),
@@ -717,13 +814,15 @@ export default function ProductsPage() {
   }
 
   // 上传成功回调
-  const handleUploadSuccess = async () => {
-    console.log("🎉 上传成功，刷新数据")
-    notifications.success("上传成功", "文件已成功上传并导入商品数据")
-    onUploadClose()
+  const handleUploadSuccess = async (result: any) => {
+    console.log("🎉 上传成功，刷新数据", result)
+
     if (selectedTemplateId) {
-      await fetchProducts()
+      await fetchProducts() // 重新获取商品列表
+      await fetchAllProductIds() // 重新获取ID列表
     }
+
+    // 通知信息已在上传组件中处理，这里不重复显示
   }
 
   const renderStatusChip = (isActive: boolean) => {
@@ -736,53 +835,30 @@ export default function ProductsPage() {
 
   const renderActions = (product: Product) => {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <Button
           isIconOnly
           size="sm"
           variant="light"
-          onClick={() => console.log("查看", product._id)}
+          color="primary"
+          onPress={() => handleEdit(product)}
+          className="h-8 w-8 min-w-8"
         >
-          <Eye className="h-4 w-4" />
-        </Button>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="light"
-          onClick={() => handleEdit(product)}
-        >
-          <Edit className="h-4 w-4" />
+          <Edit2 className="h-4 w-4" />
         </Button>
         <Button
           isIconOnly
           size="sm"
           variant="light"
           color="danger"
-          onClick={() => handleDelete(product._id)}
+          onPress={() => handleDelete(product._id)}
+          className="h-8 w-8 min-w-8"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
     )
   }
-
-  // useEffect hooks - 必须在组件顶部
-  useEffect(() => {
-    fetchTemplates()
-    setIsClient(true) // 标记客户端已挂载
-  }, [])
-
-  useEffect(() => {
-    if (selectedTemplateId) {
-      fetchProducts()
-    }
-  }, [page, limit, selectedTemplateId])
-
-  useEffect(() => {
-    if (selectedTemplateId) {
-      fetchAllProductIds()
-    }
-  }, [search, selectedTemplateId])
 
   return (
     <TemplateContext.Provider value={selectedTemplateId}>
@@ -888,24 +964,30 @@ export default function ProductsPage() {
           </CardBody>
         </Card>
 
-        {/* 搜索和筛选 */}
-        <Card>
-          <CardBody>
-            <div className="flex gap-4">
-              <Input
-                placeholder="搜索商品名称、品牌、条码..."
-                value={search}
-                onValueChange={setSearch}
-                onKeyDown={e => e.key === "Enter" && handleSearch()}
-                startContent={<Search className="h-4 w-4 text-default-400" />}
-                className="flex-1"
-              />
-              <Button color="primary" onClick={handleSearch}>
-                搜索
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
+        {/* 搜索过滤器 */}
+        <ProductSearchBar
+          onSearch={searchFilters => {
+            setFilters(searchFilters)
+            setPage(1)
+            setSelectedKeys(new Set())
+            // 使用新的filters立即搜索
+            if (selectedTemplateId) {
+              fetchProductsWithFilters(searchFilters)
+              fetchAllProductIdsWithFilters(searchFilters)
+            }
+          }}
+          onClear={() => {
+            setFilters({})
+            setPage(1)
+            setSelectedKeys(new Set())
+            // 使用空filters立即搜索
+            if (selectedTemplateId) {
+              fetchProductsWithFilters({})
+              fetchAllProductIdsWithFilters({})
+            }
+          }}
+          isLoading={loading}
+        />
 
         {/* 批量操作工具栏 */}
         {selectedKeys.size > 0 && (
@@ -999,7 +1081,7 @@ export default function ProductsPage() {
               </div>
             ) : products.length === 0 ? (
               <EmptyState
-                icon={isClient ? <Package className="h-12 w-12" /> : null}
+                icon={<Package className="h-12 w-12" />}
                 title="暂无商品数据"
                 description="开始添加您的第一个商品，或导入现有的商品数据"
                 action={{
@@ -1062,11 +1144,12 @@ export default function ProductsPage() {
                         </Dropdown>
                       </div>
                     </TableColumn>
-                    <TableColumn>商品名称</TableColumn>
-                    <TableColumn>盒码</TableColumn>
-                    <TableColumn>条码</TableColumn>
-                    <TableColumn>公司价</TableColumn>
-                    <TableColumn>品牌</TableColumn>
+                    <TableColumn>商品信息</TableColumn>
+                    <TableColumn>品牌/企业</TableColumn>
+                    <TableColumn>编码信息</TableColumn>
+                    <TableColumn>规格</TableColumn>
+                    <TableColumn>价格信息</TableColumn>
+                    <TableColumn>特性</TableColumn>
                     <TableColumn>状态</TableColumn>
                     <TableColumn width={120}>操作</TableColumn>
                   </TableHeader>
@@ -1084,31 +1167,133 @@ export default function ProductsPage() {
                             <p className="font-medium">
                               {product.name || "未知商品"}
                             </p>
-                            {product.keywords &&
-                              product.keywords.length > 0 && (
-                                <p className="text-xs text-default-500">
-                                  {product.keywords.slice(0, 3).join(", ")}
-                                  {product.keywords.length > 3 && "..."}
-                                </p>
+                            <div className="mt-1 flex gap-2">
+                              {product.productType && (
+                                <Chip size="sm" variant="flat" color="primary">
+                                  {product.productType}
+                                </Chip>
                               )}
+                              {product.packageType && (
+                                <Chip
+                                  size="sm"
+                                  variant="flat"
+                                  color="secondary"
+                                >
+                                  {product.packageType}
+                                </Chip>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <code className="rounded bg-default-100 px-2 py-1 text-xs">
-                            {product.boxCode || "无"}
-                          </code>
+                          <div>
+                            <p className="font-medium">
+                              {product.brand || "未知品牌"}
+                            </p>
+                            {product.company && (
+                              <p className="text-xs text-default-500">
+                                {product.company}
+                              </p>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <code className="rounded bg-default-100 px-2 py-1 text-xs">
-                            {product.barcode || "无"}
-                          </code>
+                          <div className="space-y-1">
+                            {product.productCode && (
+                              <div>
+                                <span className="text-xs text-default-500">
+                                  产品码:
+                                </span>
+                                <code className="ml-1 rounded bg-default-100 px-1 text-xs">
+                                  {product.productCode}
+                                </code>
+                              </div>
+                            )}
+                            {product.boxCode && (
+                              <div>
+                                <span className="text-xs text-default-500">
+                                  盒码:
+                                </span>
+                                <code className="ml-1 rounded bg-default-100 px-1 text-xs">
+                                  {product.boxCode}
+                                </code>
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <span className="font-medium text-success">
-                            ¥{(product.companyPrice || 0).toFixed(2)}
-                          </span>
+                          <div className="space-y-1 text-xs">
+                            {product.specifications?.circumference && (
+                              <div>
+                                周长: {product.specifications.circumference}mm
+                              </div>
+                            )}
+                            {product.specifications?.length && (
+                              <div>长度: {product.specifications.length}</div>
+                            )}
+                            {product.specifications?.packageQuantity && (
+                              <div>
+                                {product.specifications.packageQuantity}支装
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell>{product.brand || "未知品牌"}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {/* 公司价 - 主要显示 */}
+                            {product.pricing?.companyPrice && (
+                              <div className="text-base font-bold text-primary">
+                                ¥{product.pricing.companyPrice}
+                                <span className="ml-1 text-xs text-default-500">
+                                  公司价/{product.pricing.unit || "条"}
+                                </span>
+                              </div>
+                            )}
+                            {/* 零售价 - 次要显示 */}
+                            {product.pricing?.retailPrice && (
+                              <div className="text-sm text-default-500">
+                                零售价: ¥{product.pricing.retailPrice}
+                              </div>
+                            )}
+                            {/* 价格类型 */}
+                            {product.pricing?.priceCategory && (
+                              <Chip
+                                size="sm"
+                                variant="flat"
+                                color={
+                                  product.pricing.priceCategory === "一类"
+                                    ? "success"
+                                    : product.pricing.priceCategory === "二类"
+                                      ? "warning"
+                                      : "default"
+                                }
+                              >
+                                {product.pricing.priceCategory}
+                              </Chip>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex flex-wrap gap-1">
+                              {product.features?.hasPop && (
+                                <Chip size="sm" variant="flat" color="warning">
+                                  爆珠
+                                </Chip>
+                              )}
+                              {product.appearance?.color && (
+                                <Chip size="sm" variant="flat" color="default">
+                                  {product.appearance.color}
+                                </Chip>
+                              )}
+                            </div>
+                            {product.chemicalContent?.tarContent && (
+                              <div className="text-xs text-default-500">
+                                焦油{product.chemicalContent.tarContent}mg
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           {renderStatusChip(product.isActive ?? true)}
                         </TableCell>
@@ -1142,26 +1327,15 @@ export default function ProductsPage() {
         </Card>
 
         {/* 文件上传模态框 */}
-        <Modal isOpen={isUploadOpen} onClose={onUploadClose} size="3xl">
-          <ModalContent>
-            <ModalHeader>批量导入商品</ModalHeader>
-            <ModalBody>
-              <FileUpload
-                onUploadSuccess={handleUploadSuccess}
-                acceptedFileTypes={[".xlsx", ".xls", ".csv"]}
-                maxFileSize={10}
-                endpoint={buildApiUrl(
-                  API_ROUTES.PRODUCTS.UPLOAD(selectedTemplateId)
-                )}
-              />
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="light" onPress={onUploadClose}>
-                取消
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+        <RealProgressUpload
+          isOpen={isUploadOpen}
+          onClose={onUploadClose}
+          endpoint={buildApiUrl("/products/upload")}
+          templateId={selectedTemplateId}
+          onSuccess={handleUploadSuccess}
+          acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
+          maxFileSize={10}
+        />
 
         {/* 删除确认模态框 */}
         <ConfirmModal
@@ -1192,19 +1366,47 @@ export default function ProductsPage() {
         <Modal
           isOpen={isEditOpen}
           onClose={onEditClose}
-          size="3xl"
+          size="5xl"
           scrollBehavior="inside"
         >
           <ModalContent>
-            <ModalHeader>编辑商品</ModalHeader>
-            <ModalBody>
-              <ProductForm
-                product={editingProduct}
-                onSubmit={updateProduct}
-                onCancel={onEditClose}
-                isLoading={loading}
-              />
-            </ModalBody>
+            {onClose => {
+              const submitFormRef = useRef<(() => void) | null>(null)
+
+              return (
+                <>
+                  <ModalHeader>编辑商品</ModalHeader>
+                  <ModalBody>
+                    <ProductForm
+                      product={editingProduct}
+                      onSubmit={updateProduct}
+                      onCancel={onEditClose}
+                      isLoading={loading}
+                      renderButtons={() => null}
+                      exposeSubmit={submitFn => {
+                        submitFormRef.current = submitFn
+                      }}
+                    />
+                  </ModalBody>
+                  <ModalFooter>
+                    <Button variant="light" onPress={onEditClose}>
+                      取消
+                    </Button>
+                    <Button
+                      color="primary"
+                      onPress={() => {
+                        if (submitFormRef.current) {
+                          submitFormRef.current()
+                        }
+                      }}
+                      isLoading={loading}
+                    >
+                      更新
+                    </Button>
+                  </ModalFooter>
+                </>
+              )
+            }}
           </ModalContent>
         </Modal>
 
@@ -1212,18 +1414,46 @@ export default function ProductsPage() {
         <Modal
           isOpen={isCreateOpen}
           onClose={onCreateClose}
-          size="3xl"
+          size="5xl"
           scrollBehavior="inside"
         >
           <ModalContent>
-            <ModalHeader>新增商品</ModalHeader>
-            <ModalBody>
-              <ProductForm
-                onSubmit={createProduct}
-                onCancel={onCreateClose}
-                isLoading={loading}
-              />
-            </ModalBody>
+            {onClose => {
+              const submitFormRef = useRef<(() => void) | null>(null)
+
+              return (
+                <>
+                  <ModalHeader>新增商品</ModalHeader>
+                  <ModalBody>
+                    <ProductForm
+                      onSubmit={createProduct}
+                      onCancel={onCreateClose}
+                      isLoading={loading}
+                      renderButtons={() => null}
+                      exposeSubmit={submitFn => {
+                        submitFormRef.current = submitFn
+                      }}
+                    />
+                  </ModalBody>
+                  <ModalFooter>
+                    <Button variant="light" onPress={onCreateClose}>
+                      取消
+                    </Button>
+                    <Button
+                      color="primary"
+                      onPress={() => {
+                        if (submitFormRef.current) {
+                          submitFormRef.current()
+                        }
+                      }}
+                      isLoading={loading}
+                    >
+                      创建
+                    </Button>
+                  </ModalFooter>
+                </>
+              )
+            }}
           </ModalContent>
         </Modal>
       </div>

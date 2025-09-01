@@ -20,9 +20,33 @@ interface Product {
   _id: string
   name: string
   brand: string
-  companyPrice: number
+  company: string
+  productType: string
+  packageType: string
+  specifications: {
+    circumference: number
+    length: string
+    packageQuantity: number
+  }
+  chemicalContent: {
+    tarContent: number
+    nicotineContent: number
+    carbonMonoxideContent: number
+  }
+  appearance: {
+    color: string
+  }
+  features: {
+    hasPop: boolean
+  }
+  pricing: {
+    priceCategory: string
+    retailPrice: number
+    unit: string
+    companyPrice: number
+  }
+  productCode: string
   boxCode: string
-  barcode: string
   keywords: string[]
   category: string
 }
@@ -41,9 +65,33 @@ interface MatchingResult {
       _id: string
       name: string
       brand: string
-      companyPrice: number
+      company: string
+      productType: string
+      packageType: string
+      specifications: {
+        circumference: number
+        length: string
+        packageQuantity: number
+      }
+      chemicalContent: {
+        tarContent: number
+        nicotineContent: number
+        carbonMonoxideContent: number
+      }
+      appearance: {
+        color: string
+      }
+      features: {
+        hasPop: boolean
+      }
+      pricing: {
+        priceCategory: string
+        retailPrice: number
+        unit: string
+        companyPrice: number
+      }
+      productCode: string
       boxCode: string
-      barcode: string
     }
     confidence: number
     score: number
@@ -90,7 +138,7 @@ export default function BatchEditModal({
     }
   }, [isOpen])
 
-  // 过滤商品 - 性能优化，支持条码和盒码搜索
+  // 过滤商品 - 性能优化，支持全字段搜索
   const filteredProducts = useMemo(() => {
     if (!searchTerm) return templateProducts
 
@@ -99,8 +147,14 @@ export default function BatchEditModal({
       product =>
         product.name.toLowerCase().includes(lowerSearchTerm) ||
         product.brand.toLowerCase().includes(lowerSearchTerm) ||
-        product.barcode?.toLowerCase().includes(lowerSearchTerm) ||
+        product.company?.toLowerCase().includes(lowerSearchTerm) ||
+        product.productType?.toLowerCase().includes(lowerSearchTerm) ||
+        product.packageType?.toLowerCase().includes(lowerSearchTerm) ||
+        product.productCode?.toLowerCase().includes(lowerSearchTerm) ||
         product.boxCode?.toLowerCase().includes(lowerSearchTerm) ||
+        product.pricing?.priceCategory
+          ?.toLowerCase()
+          .includes(lowerSearchTerm) ||
         product.keywords.some(keyword =>
           keyword.toLowerCase().includes(searchTerm.toLowerCase())
         )
@@ -249,7 +303,11 @@ export default function BatchEditModal({
                                 </p>
                                 <p className="text-xs text-default-500">
                                   {record.selectedMatch.productId.brand} | ¥
-                                  {record.selectedMatch.productId.companyPrice}
+                                  {record.selectedMatch.productId.pricing
+                                    ?.companyPrice ||
+                                    record.selectedMatch.productId.pricing
+                                      ?.retailPrice ||
+                                    0}
                                 </p>
                               </div>
                             ) : (
@@ -273,7 +331,9 @@ export default function BatchEditModal({
                                 </p>
                                 <p className="text-xs text-primary-600">
                                   {selectedProduct.brand} | ¥
-                                  {selectedProduct.companyPrice}
+                                  {selectedProduct.pricing?.companyPrice ||
+                                    selectedProduct.pricing?.retailPrice ||
+                                    0}
                                 </p>
                                 <Button
                                   size="sm"
@@ -331,7 +391,7 @@ export default function BatchEditModal({
                                 setTimeout(() => input.focus(), 100)
                               }
                             }}
-                            placeholder="搜索商品名称、品牌、条码、盒码或关键词..."
+                            placeholder="搜索商品名称、品牌、企业、产品类型、价格类型、条码、盒码或关键词..."
                             value={searchTerm}
                             onValueChange={setSearchTerm}
                             startContent={<Search className="h-4 w-4" />}
@@ -401,19 +461,18 @@ export default function BatchEditModal({
                                             {product.name}
                                           </p>
                                           <div className="space-y-1">
-                                            <p className="text-xs text-default-600">
-                                              品牌: {product.brand}
-                                            </p>
-                                            {product.barcode && (
-                                              <p className="text-xs text-default-500">
-                                                条码: {product.barcode}
-                                              </p>
-                                            )}
-                                            {product.boxCode && (
-                                              <p className="text-xs text-default-500">
-                                                盒码: {product.boxCode}
-                                              </p>
-                                            )}
+                                            {/* 基本信息 */}
+                                            <div className="flex flex-wrap gap-2 text-xs text-default-600">
+                                              <span>{product.brand}</span>
+                                              {product.company && (
+                                                <>
+                                                  <span>|</span>
+                                                  <span>{product.company}</span>
+                                                </>
+                                              )}
+                                            </div>
+
+                                            {/* 价格信息 */}
                                             <p
                                               className={`text-xs font-medium ${
                                                 isSelected
@@ -421,8 +480,99 @@ export default function BatchEditModal({
                                                   : "text-success"
                                               }`}
                                             >
-                                              ¥{product.companyPrice}
+                                              ¥
+                                              {product.pricing?.companyPrice ||
+                                                product.pricing?.retailPrice ||
+                                                0}
+                                              {product.pricing?.unit &&
+                                                ` / ${product.pricing.unit}`}
                                             </p>
+
+                                            {/* 规格信息 */}
+                                            {product.specifications && (
+                                              <div className="space-y-0.5">
+                                                {product.specifications
+                                                  .circumference && (
+                                                  <p className="text-xs text-default-500">
+                                                    周长:{" "}
+                                                    {
+                                                      product.specifications
+                                                        .circumference
+                                                    }
+                                                    mm
+                                                  </p>
+                                                )}
+                                                {product.specifications
+                                                  .length && (
+                                                  <p className="text-xs text-default-500">
+                                                    长度:{" "}
+                                                    {
+                                                      product.specifications
+                                                        .length
+                                                    }
+                                                  </p>
+                                                )}
+                                              </div>
+                                            )}
+
+                                            {/* 编码信息 */}
+                                            <div className="space-y-0.5">
+                                              {product.productCode && (
+                                                <p className="text-xs text-default-500">
+                                                  产品编码:{" "}
+                                                  {product.productCode}
+                                                </p>
+                                              )}
+                                              {product.boxCode && (
+                                                <p className="text-xs text-default-500">
+                                                  盒码: {product.boxCode}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {/* 特殊属性标签 */}
+                                          <div className="flex flex-wrap gap-1">
+                                            {product.pricing?.priceCategory && (
+                                              <Chip
+                                                size="sm"
+                                                variant="flat"
+                                                color="secondary"
+                                                className="text-xs"
+                                              >
+                                                {product.pricing.priceCategory}
+                                              </Chip>
+                                            )}
+                                            {product.packageType && (
+                                              <Chip
+                                                size="sm"
+                                                variant="flat"
+                                                color="default"
+                                                className="text-xs"
+                                              >
+                                                {product.packageType}
+                                              </Chip>
+                                            )}
+                                            {product.features?.hasPop && (
+                                              <Chip
+                                                size="sm"
+                                                variant="flat"
+                                                color="success"
+                                                className="text-xs"
+                                              >
+                                                爆珠
+                                              </Chip>
+                                            )}
+                                            {product.appearance?.color && (
+                                              <Chip
+                                                size="sm"
+                                                variant="flat"
+                                                color="warning"
+                                                className="text-xs"
+                                              >
+                                                {product.appearance.color}
+                                              </Chip>
+                                            )}
                                           </div>
                                           {product.keywords.length > 0 && (
                                             <div className="flex flex-wrap gap-1">

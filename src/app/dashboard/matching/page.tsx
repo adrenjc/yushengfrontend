@@ -43,7 +43,7 @@ import {
 import { FileUpload } from "@/components/ui/file-upload"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
-import { buildApiUrl, API_ROUTES } from "@/lib/api"
+import { buildApiUrl, API_ROUTES, getAuthOnlyHeaders } from "@/lib/api"
 import { getAuthHeaders } from "@/lib/auth"
 
 interface ProductTemplate {
@@ -156,6 +156,14 @@ export default function MatchingPage() {
     onClose: onUploadClose,
   } = useDisclosure()
 
+  // 删除确认弹窗状态
+  const {
+    isOpen: isDeleteOpen,
+    onOpen: onDeleteOpen,
+    onClose: onDeleteClose,
+  } = useDisclosure()
+  const [taskToDelete, setTaskToDelete] = useState<MatchingTask | null>(null)
+
   // 打开上传弹窗时自动选择默认模板
   const handleUploadOpen = () => {
     // 如果没有选择模板，自动选择默认模板
@@ -256,7 +264,7 @@ export default function MatchingPage() {
 
       const response = await fetch(buildApiUrl("/matching/tasks"), {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: getAuthOnlyHeaders(), // 使用不包含Content-Type的认证头
         body: formData,
       })
 
@@ -364,13 +372,24 @@ export default function MatchingPage() {
     )
   }
 
-  // 删除任务
-  const deleteTask = async (taskId: string) => {
+  // 打开删除确认弹窗
+  const handleDeleteTask = (task: MatchingTask) => {
+    setTaskToDelete(task)
+    onDeleteOpen()
+  }
+
+  // 确认删除任务
+  const confirmDeleteTask = async () => {
+    if (!taskToDelete) return
+
     try {
-      const response = await fetch(buildApiUrl(`/matching/tasks/${taskId}`), {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      })
+      const response = await fetch(
+        buildApiUrl(`/matching/tasks/${taskToDelete._id}`),
+        {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        }
+      )
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
@@ -378,9 +397,12 @@ export default function MatchingPage() {
 
       notifications.success("删除成功", "匹配任务已删除")
       await fetchTasks()
+      onDeleteClose()
     } catch (error) {
       console.error("❌ 删除任务失败:", error)
       notifications.error("删除失败", "无法删除匹配任务")
+    } finally {
+      setTaskToDelete(null)
     }
   }
 
@@ -487,11 +509,7 @@ export default function MatchingPage() {
           size="sm"
           variant="light"
           color="danger"
-          onClick={() => {
-            if (confirm("确定要删除这个匹配任务吗？此操作无法撤销。")) {
-              deleteTask(task._id)
-            }
-          }}
+          onClick={() => handleDeleteTask(task)}
           title="删除任务"
         >
           <XCircle className="h-4 w-4" />
@@ -1001,6 +1019,70 @@ export default function MatchingPage() {
           <ModalFooter>
             <Button variant="light" onPress={onUploadClose}>
               取消
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* 删除确认弹窗 */}
+      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} size="md">
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-danger" />
+              <span>确认删除匹配任务</span>
+            </div>
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              {taskToDelete && (
+                <div className="rounded-lg bg-default-50 p-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-default-500" />
+                      <span className="font-medium">
+                        {taskToDelete.originalFilename}
+                      </span>
+                    </div>
+                    <div className="text-sm text-default-500">
+                      <div>任务ID: {taskToDelete._id}</div>
+                      <div>创建时间: {formatDate(taskToDelete.createdAt)}</div>
+                      <div>
+                        状态: <StatusChip status={taskToDelete.status} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-danger-200 bg-danger-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-danger" />
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-danger">警告</h4>
+                    <div className="text-sm text-danger-600">
+                      <p>删除此匹配任务将会：</p>
+                      <ul className="mt-2 list-inside list-disc space-y-1">
+                        <li>永久删除任务及其所有匹配记录</li>
+                        <li>删除相关的审核历史和统计数据</li>
+                        <li>此操作无法撤销</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={onDeleteClose}>
+              取消
+            </Button>
+            <Button
+              color="danger"
+              onPress={confirmDeleteTask}
+              startContent={<XCircle className="h-4 w-4" />}
+            >
+              确认删除
             </Button>
           </ModalFooter>
         </ModalContent>

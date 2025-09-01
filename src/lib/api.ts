@@ -42,6 +42,7 @@ export const API_ROUTES = {
     DETAIL: (id: string) => `/products/${id}`,
     CREATE: "/products",
     UPDATE: (id: string) => `/products/${id}`,
+    UPDATE_STATUS: (id: string) => `/products/${id}/status`,
     DELETE: (id: string) => `/products/${id}`,
     HARD_DELETE: "/products/hard-delete",
     BATCH: "/products/batch",
@@ -70,17 +71,37 @@ export const buildApiUrl = (path: string): string => {
  */
 const getAuthHeaders = (): HeadersInit => {
   const headers: HeadersInit = { ...API_CONFIG.HEADERS }
-  
+
   // 动态获取当前的认证 token
   const token = getAuthToken()
-  
+
   if (token) {
     headers.Authorization = `Bearer ${token}`
   } else if (process.env.NODE_ENV === "development") {
     // 开发环境下如果没有真实token，使用mock token
     headers.Authorization = "Bearer dev-mock-token"
   }
-  
+
+  return headers
+}
+
+/**
+ * 获取仅包含认证信息的请求头（不包含Content-Type）
+ * 用于文件上传等需要浏览器自动设置Content-Type的场景
+ */
+export const getAuthOnlyHeaders = (): HeadersInit => {
+  const headers: HeadersInit = {}
+
+  // 动态获取当前的认证 token
+  const token = getAuthToken()
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  } else if (process.env.NODE_ENV === "development") {
+    // 开发环境下如果没有真实token，使用mock token
+    headers.Authorization = "Bearer dev-mock-token"
+  }
+
   return headers
 }
 
@@ -174,7 +195,7 @@ export const apiDelete = <T = any>(url: string): Promise<T> => {
 export const createAuthenticatedFetch = () => {
   return (url: string, options: RequestInit = {}): Promise<Response> => {
     const fullUrl = url.startsWith("http") ? url : buildApiUrl(url)
-    
+
     const config: RequestInit = {
       headers: {
         ...getAuthHeaders(),
@@ -182,7 +203,7 @@ export const createAuthenticatedFetch = () => {
       },
       ...options,
     }
-    
+
     return fetch(fullUrl, config)
   }
 }
