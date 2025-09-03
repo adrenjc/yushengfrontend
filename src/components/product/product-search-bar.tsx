@@ -121,7 +121,7 @@ export default function ProductSearchBar({
 
       // 立即触发搜索
       setTimeout(() => {
-        const processedFilters: SearchFilters = {}
+        const processedFilters: Partial<SearchFilters> = {}
         Object.entries(newFilters).forEach(([key, val]) => {
           if (
             val !== undefined &&
@@ -129,11 +129,11 @@ export default function ProductSearchBar({
             val !== "" &&
             val !== "all"
           ) {
-            processedFilters[key as keyof SearchFilters] = val
+            ;(processedFilters as any)[key] = val
           }
         })
-        setAppliedFilters(processedFilters)
-        onSearch(processedFilters)
+        setAppliedFilters(processedFilters as SearchFilters)
+        onSearch(processedFilters as SearchFilters)
       }, 0)
     },
     [filters, onSearch]
@@ -141,7 +141,7 @@ export default function ProductSearchBar({
 
   // 执行搜索
   const handleSearch = useCallback(() => {
-    const processedFilters: SearchFilters = {}
+    const processedFilters: Partial<SearchFilters> = {}
 
     // 处理基础搜索
     if (filters.search?.trim()) {
@@ -201,9 +201,9 @@ export default function ProductSearchBar({
       processedFilters.launchDateEnd = filters.launchDateEnd
 
     // 更新已应用的筛选条件（用于显示提示）
-    setAppliedFilters(processedFilters)
+    setAppliedFilters(processedFilters as SearchFilters)
 
-    onSearch(processedFilters)
+    onSearch(processedFilters as SearchFilters)
   }, [filters, onSearch])
 
   // 清空所有筛选
@@ -485,7 +485,7 @@ export default function ProductSearchBar({
 
                           // 立即触发搜索
                           setTimeout(() => {
-                            const processedFilters: SearchFilters = {}
+                            const processedFilters: Partial<SearchFilters> = {}
                             Object.entries(newFilters).forEach(([key, val]) => {
                               if (
                                 val !== undefined &&
@@ -493,12 +493,11 @@ export default function ProductSearchBar({
                                 val !== "" &&
                                 val !== "all"
                               ) {
-                                processedFilters[key as keyof SearchFilters] =
-                                  val
+                                ;(processedFilters as any)[key] = val
                               }
                             })
-                            setAppliedFilters(processedFilters)
-                            onSearch(processedFilters)
+                            setAppliedFilters(processedFilters as SearchFilters)
+                            onSearch(processedFilters as SearchFilters)
                           }, 0)
                         }
                       }

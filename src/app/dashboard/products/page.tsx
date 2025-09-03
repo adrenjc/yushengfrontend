@@ -136,6 +136,8 @@ interface Product {
   wholesale?: {
     name?: string
     price?: number
+    unit?: string
+    updatedAt?: string
   }
   category?: string
   keywords: string[]
@@ -1179,16 +1181,16 @@ export default function ProductsPage() {
                                 <div className="text-base font-bold text-success">
                                   ¥{product.wholesale.price}
                                 </div>
-                                {product.wholesale.updatedAt && (
+                                {product.wholesale?.updatedAt && (
                                   <div className="mt-1 text-xs text-default-500">
                                     <div className="whitespace-nowrap">
                                       {new Date(
-                                        product.wholesale.updatedAt
+                                        product.wholesale.updatedAt as string
                                       ).toLocaleDateString("zh-CN")}
                                     </div>
                                     <div className="whitespace-nowrap">
                                       {new Date(
-                                        product.wholesale.updatedAt
+                                        product.wholesale.updatedAt as string
                                       ).toLocaleTimeString("zh-CN", {
                                         hour12: false,
                                         hour: "2-digit",
