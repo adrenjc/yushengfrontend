@@ -40,6 +40,10 @@ export interface SearchFilters {
   launchDateStart?: string
   launchDateEnd?: string
   isActive?: string
+  // 批发价相关筛选
+  hasWholesalePrice?: string // "all" | "yes" | "no"
+  wholesalePriceMin?: number
+  wholesalePriceMax?: number
 }
 
 interface ProductSearchBarProps {
@@ -58,6 +62,7 @@ export default function ProductSearchBar({
   const [filters, setFilters] = useState<SearchFilters>({
     isActive: "all",
     hasPop: "all",
+    hasWholesalePrice: "all",
   })
 
   // 已应用的筛选条件（只有在点击搜索后才更新）
@@ -106,6 +111,32 @@ export default function ProductSearchBar({
       setFilters(prev => ({ ...prev, [field]: value }))
     },
     []
+  )
+
+  // 处理快速筛选变化（立即触发搜索）
+  const handleQuickFilterChange = useCallback(
+    (field: keyof SearchFilters, value: any) => {
+      const newFilters = { ...filters, [field]: value }
+      setFilters(newFilters)
+
+      // 立即触发搜索
+      setTimeout(() => {
+        const processedFilters: SearchFilters = {}
+        Object.entries(newFilters).forEach(([key, val]) => {
+          if (
+            val !== undefined &&
+            val !== null &&
+            val !== "" &&
+            val !== "all"
+          ) {
+            processedFilters[key as keyof SearchFilters] = val
+          }
+        })
+        setAppliedFilters(processedFilters)
+        onSearch(processedFilters)
+      }, 0)
+    },
+    [filters, onSearch]
   )
 
   // 执行搜索
@@ -217,11 +248,22 @@ export default function ProductSearchBar({
     if (appliedFilters.hasPop && appliedFilters.hasPop !== "all") {
       active.push(`爆珠: ${appliedFilters.hasPop === "true" ? "有" : "无"}`)
     }
+    if (
+      appliedFilters.hasWholesalePrice &&
+      appliedFilters.hasWholesalePrice !== "all"
+    ) {
+      active.push(
+        `批发价: ${appliedFilters.hasWholesalePrice === "yes" ? "有" : "无"}`
+      )
+    }
     if (appliedFilters.circumferenceMin || appliedFilters.circumferenceMax) {
       active.push("周长范围")
     }
     if (appliedFilters.retailPriceMin || appliedFilters.retailPriceMax) {
       active.push("价格范围")
+    }
+    if (appliedFilters.wholesalePriceMin || appliedFilters.wholesalePriceMax) {
+      active.push("批发价范围")
     }
     if (appliedFilters.tarContentMin || appliedFilters.tarContentMax) {
       active.push("焦油含量")
@@ -275,7 +317,7 @@ export default function ProductSearchBar({
             selectedKeys={filters.productType ? [filters.productType] : []}
             onSelectionChange={keys => {
               const value = Array.from(keys)[0] as string
-              handleInputChange("productType", value || "")
+              handleQuickFilterChange("productType", value || "")
             }}
             className="w-32"
             size="sm"
@@ -293,7 +335,7 @@ export default function ProductSearchBar({
             selectedKeys={filters.priceCategory ? [filters.priceCategory] : []}
             onSelectionChange={keys => {
               const value = Array.from(keys)[0] as string
-              handleInputChange("priceCategory", value || "")
+              handleQuickFilterChange("priceCategory", value || "")
             }}
             className="w-32"
             size="sm"
@@ -311,7 +353,7 @@ export default function ProductSearchBar({
             selectedKeys={[filters.isActive || "all"]}
             onSelectionChange={keys => {
               const value = Array.from(keys)[0] as string
-              handleInputChange("isActive", value || "all")
+              handleQuickFilterChange("isActive", value || "all")
             }}
             className="w-24"
             size="sm"
@@ -333,7 +375,7 @@ export default function ProductSearchBar({
             selectedKeys={[filters.hasPop || "all"]}
             onSelectionChange={keys => {
               const value = Array.from(keys)[0] as string
-              handleInputChange("hasPop", value || "all")
+              handleQuickFilterChange("hasPop", value || "all")
             }}
             className="w-24"
             size="sm"
@@ -347,6 +389,28 @@ export default function ProductSearchBar({
             </SelectItem>
             <SelectItem key="false" value="false">
               无爆珠
+            </SelectItem>
+          </Select>
+
+          <Select
+            placeholder="批发价"
+            selectedKeys={[filters.hasWholesalePrice || "all"]}
+            onSelectionChange={keys => {
+              const value = Array.from(keys)[0] as string
+              handleQuickFilterChange("hasWholesalePrice", value || "all")
+            }}
+            className="w-32"
+            size="sm"
+            classNames={{ trigger: "h-8 min-h-8" }}
+          >
+            <SelectItem key="all" value="all">
+              全部
+            </SelectItem>
+            <SelectItem key="yes" value="yes">
+              已有批发价
+            </SelectItem>
+            <SelectItem key="no" value="no">
+              暂无批发价
             </SelectItem>
           </Select>
 
@@ -374,25 +438,69 @@ export default function ProductSearchBar({
                   <button
                     className="ml-1"
                     onClick={() => {
-                      // 根据筛选条件类型清除相应的值
+                      // 根据筛选条件类型清除相应的值，并立即触发搜索
                       if (filter === "搜索") {
-                        handleInputChange("search", "")
+                        handleQuickFilterChange("search", "")
                       } else if (filter.startsWith("品牌:")) {
-                        handleInputChange("brand", "")
+                        handleQuickFilterChange("brand", "")
                       } else if (filter.startsWith("企业:")) {
-                        handleInputChange("company", "")
+                        handleQuickFilterChange("company", "")
                       } else if (filter.startsWith("类型:")) {
-                        handleInputChange("productType", "")
+                        handleQuickFilterChange("productType", "")
                       } else if (filter.startsWith("包装:")) {
-                        handleInputChange("packageType", "")
+                        handleQuickFilterChange("packageType", "")
                       } else if (filter.startsWith("价格类型:")) {
-                        handleInputChange("priceCategory", "")
+                        handleQuickFilterChange("priceCategory", "")
                       } else if (filter.startsWith("颜色:")) {
-                        handleInputChange("color", "")
+                        handleQuickFilterChange("color", "")
                       } else if (filter.startsWith("状态:")) {
-                        handleInputChange("isActive", "all")
+                        handleQuickFilterChange("isActive", "all")
                       } else if (filter.startsWith("爆珠:")) {
-                        handleInputChange("hasPop", "all")
+                        handleQuickFilterChange("hasPop", "all")
+                      } else if (filter.startsWith("批发价:")) {
+                        handleQuickFilterChange("hasWholesalePrice", "all")
+                      } else {
+                        // 处理范围筛选
+                        const rangeFilters: Record<
+                          string,
+                          [keyof SearchFilters, keyof SearchFilters]
+                        > = {
+                          批发价范围: [
+                            "wholesalePriceMin",
+                            "wholesalePriceMax",
+                          ],
+                          周长范围: ["circumferenceMin", "circumferenceMax"],
+                          价格范围: ["retailPriceMin", "retailPriceMax"],
+                          焦油含量: ["tarContentMin", "tarContentMax"],
+                          上市时间: ["launchDateStart", "launchDateEnd"],
+                        }
+
+                        const fieldsToClear = rangeFilters[filter]
+                        if (fieldsToClear) {
+                          const newFilters = { ...filters }
+                          fieldsToClear.forEach(field => {
+                            newFilters[field] = undefined
+                          })
+                          setFilters(newFilters)
+
+                          // 立即触发搜索
+                          setTimeout(() => {
+                            const processedFilters: SearchFilters = {}
+                            Object.entries(newFilters).forEach(([key, val]) => {
+                              if (
+                                val !== undefined &&
+                                val !== null &&
+                                val !== "" &&
+                                val !== "all"
+                              ) {
+                                processedFilters[key as keyof SearchFilters] =
+                                  val
+                              }
+                            })
+                            setAppliedFilters(processedFilters)
+                            onSearch(processedFilters)
+                          }, 0)
+                        }
                       }
                     }}
                   >
@@ -631,10 +739,10 @@ export default function ProductSearchBar({
                 {/* 价格和其他 */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium text-default-700">
-                    价格和其他
+                    价格范围
                   </h4>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div className="flex items-center gap-2 md:col-span-2">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="flex items-center gap-2">
                       <Input
                         label="零售价格最小值"
                         placeholder="例: 100"
@@ -664,6 +772,46 @@ export default function ProductSearchBar({
                       />
                     </div>
 
+                    <div className="flex items-center gap-2">
+                      <Input
+                        label="批发价格最小值"
+                        placeholder="例: 150"
+                        value={filters.wholesalePriceMin?.toString() || ""}
+                        onChange={e =>
+                          handleInputChange("wholesalePriceMin", e.target.value)
+                        }
+                        size="sm"
+                        type="number"
+                        endContent={
+                          <span className="text-xs text-default-400">元</span>
+                        }
+                      />
+                      <span className="text-default-400">-</span>
+                      <Input
+                        label="批发价格最大值"
+                        placeholder="例: 800"
+                        value={filters.wholesalePriceMax?.toString() || ""}
+                        onChange={e =>
+                          handleInputChange("wholesalePriceMax", e.target.value)
+                        }
+                        size="sm"
+                        type="number"
+                        endContent={
+                          <span className="text-xs text-default-400">元</span>
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Divider />
+
+                {/* 其他属性 */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-default-700">
+                    其他属性
+                  </h4>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <Select
                       label="颜色"
                       placeholder="选择颜色"

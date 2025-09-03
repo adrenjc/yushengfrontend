@@ -201,10 +201,17 @@ function MatchingResultsPageContent() {
   const taskName = searchParams.get("taskName") || "未知任务"
   const taskIdentifier = searchParams.get("taskIdentifier") || ""
 
+  // 防止SSR/CSR不一致导致的hydration报错
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const [results, setResults] = useState<MatchingResult[]>([])
   const [taskInfo, setTaskInfo] = useState<TaskInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("all")
+  const [sortBy, setSortBy] = useState("confidence_desc")
 
   // 修改匹配相关状态
   const [editingRecord, setEditingRecord] = useState<MatchingResult | null>(
@@ -294,6 +301,35 @@ function MatchingResultsPageContent() {
     return result.status === filter
   })
 
+  // 计算用于排序的价格（公司价优先，退化到零售价）
+  const getResultPrice = (r: MatchingResult): number => {
+    const p = r.selectedMatch?.productId?.pricing
+    if (!p) return 0
+    return (p.companyPrice || p.retailPrice || 0) as number
+  }
+
+  // 排序后的结果
+  const sortedResults = [...filteredResults].sort((a, b) => {
+    switch (sortBy) {
+      case "confidence_desc":
+        return (
+          (b.selectedMatch?.confidence || 0) -
+          (a.selectedMatch?.confidence || 0)
+        )
+      case "confidence_asc":
+        return (
+          (a.selectedMatch?.confidence || 0) -
+          (b.selectedMatch?.confidence || 0)
+        )
+      case "price_desc":
+        return getResultPrice(b) - getResultPrice(a)
+      case "price_asc":
+        return getResultPrice(a) - getResultPrice(b)
+      default:
+        return 0
+    }
+  })
+
   // 导出状态
   const [isExporting, setIsExporting] = useState(false)
 
@@ -304,7 +340,9 @@ function MatchingResultsPageContent() {
     setIsExporting(true)
     try {
       const response = await fetch(
-        buildApiUrl(`/matching/tasks/${taskId}/export?format=${format}`),
+        buildApiUrl(
+          `/matching/tasks/${taskId}/export?format=${format}&sortBy=${sortBy}&fields=productCode,boxCode,companyPrice`
+        ),
         {
           method: "GET",
           headers: getAuthHeaders(),
@@ -693,7 +731,7 @@ function MatchingResultsPageContent() {
         "状态",
         "来源行号",
       ],
-      ...filteredResults.map(result => [
+      ...sortedResults.map(result => [
         result.originalData.name,
         result.originalData.price || 0,
         result.originalData.quantity || 1,
@@ -746,6 +784,10 @@ function MatchingResultsPageContent() {
     console.log("🔄 useEffect 触发，taskId:", taskId)
     fetchResults()
   }, [taskId])
+
+  if (!mounted) {
+    return null
+  }
 
   if (!taskId) {
     return (
@@ -807,6 +849,18 @@ function MatchingResultsPageContent() {
             <SelectItem key="confirmed">已确认</SelectItem>
             <SelectItem key="rejected">已拒绝</SelectItem>
             <SelectItem key="exception">异常</SelectItem>
+          </Select>
+          <Select
+            size="sm"
+            placeholder="排序方式"
+            selectedKeys={[sortBy]}
+            onChange={e => setSortBy(e.target.value)}
+            className="w-56"
+          >
+            <SelectItem key="confidence_desc">按置信度(高→低)</SelectItem>
+            <SelectItem key="confidence_asc">按置信度(低→高)</SelectItem>
+            <SelectItem key="price_desc">按价格(高→低)</SelectItem>
+            <SelectItem key="price_asc">按价格(低→高)</SelectItem>
           </Select>
           <Button
             color="warning"
@@ -1011,7 +1065,7 @@ function MatchingResultsPageContent() {
                 </TableColumn>
               </TableHeader>
               <TableBody>
-                {filteredResults.map(result => (
+                {sortedResults.map(result => (
                   <TableRow
                     key={result._id}
                     className={

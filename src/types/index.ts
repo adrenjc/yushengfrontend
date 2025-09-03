@@ -44,8 +44,14 @@ export interface Product {
   keywords: string[]
   category: string
   specifications: ProductSpecifications
-  wholesaleName?: string
-  wholesalePrice?: number
+  wholesale?: {
+    name?: string
+    price?: number
+    unit?: string
+    updatedAt?: string
+    source?: "manual" | "matching" | "import"
+    lastMatchingRecord?: string
+  }
   isActive: boolean
   createdAt: string
   updatedAt: string

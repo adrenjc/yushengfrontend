@@ -279,15 +279,7 @@ export default function ProductsPage() {
   const fetchTemplates = async () => {
     try {
       setTemplatesLoading(true)
-      const response = await fetch(buildApiUrl(API_ROUTES.TEMPLATES.OPTIONS), {
-        headers: getAuthHeaders(),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = await apiGet(API_ROUTES.TEMPLATES.OPTIONS)
       const templateList = data.data.templates || []
       setTemplates(templateList)
 
@@ -301,7 +293,10 @@ export default function ProductsPage() {
       }
     } catch (error) {
       console.error("❌ 获取模板列表失败:", error)
-      notifications.error("加载失败", "无法获取模板列表")
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error("加载失败", "无法获取模板列表")
+      }
     } finally {
       setTemplatesLoading(false)
     }
@@ -321,12 +316,12 @@ export default function ProductsPage() {
         searchFilters
       )
 
-      // 使用统一的API配置
-      const baseUrl = buildApiUrl(API_ROUTES.PRODUCTS.LIST)
-      const url = new URL(baseUrl)
-      url.searchParams.set("templateId", selectedTemplateId)
-      url.searchParams.set("page", page.toString())
-      url.searchParams.set("limit", limit.toString())
+      // 构建查询参数
+      const params: any = {
+        templateId: selectedTemplateId,
+        page: page.toString(),
+        limit: limit.toString(),
+      }
 
       // 添加过滤器参数
       Object.entries(searchFilters).forEach(([key, value]) => {
@@ -335,25 +330,19 @@ export default function ProductsPage() {
             // 处理范围类型的过滤器
             Object.entries(value).forEach(([subKey, subValue]) => {
               if (subValue !== undefined && subValue !== null) {
-                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+                params[`${key}.${subKey}`] = subValue.toString()
               }
             })
           } else {
-            url.searchParams.set(key, value.toString())
+            params[key] = value.toString()
           }
         }
       })
 
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        headers: getAuthHeaders(),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data: ProductsResponse = await response.json()
+      const data: ProductsResponse = await apiGet(
+        API_ROUTES.PRODUCTS.LIST,
+        params
+      )
       setProducts(data.data.products)
       setTotal(data.data.pagination.total)
       console.log("✅ 产品数据获取成功", {
@@ -362,10 +351,13 @@ export default function ProductsPage() {
       })
     } catch (error) {
       console.error("❌ 产品数据获取失败:", error)
-      notifications.error(
-        "获取产品数据失败",
-        error instanceof Error ? error.message : "未知错误"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "获取产品数据失败",
+          error instanceof Error ? error.message : "未知错误"
+        )
+      }
       setProducts([])
       setTotal(0)
     } finally {
@@ -387,12 +379,12 @@ export default function ProductsPage() {
         filters
       )
 
-      // 使用统一的API配置
-      const baseUrl = buildApiUrl(API_ROUTES.PRODUCTS.LIST)
-      const url = new URL(baseUrl)
-      url.searchParams.set("templateId", selectedTemplateId)
-      url.searchParams.set("page", page.toString())
-      url.searchParams.set("limit", limit.toString())
+      // 构建查询参数
+      const params: any = {
+        templateId: selectedTemplateId,
+        page: page.toString(),
+        limit: limit.toString(),
+      }
 
       // 添加过滤器参数
       Object.entries(filters).forEach(([key, value]) => {
@@ -401,26 +393,19 @@ export default function ProductsPage() {
             // 处理范围类型的过滤器
             Object.entries(value).forEach(([subKey, subValue]) => {
               if (subValue !== undefined && subValue !== null) {
-                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+                params[`${key}.${subKey}`] = subValue.toString()
               }
             })
           } else {
-            url.searchParams.set(key, value.toString())
+            params[key] = value.toString()
           }
         }
       })
 
-      console.log(`🔗 请求URL: ${url.toString()}`)
-
-      const response = await fetch(url.toString(), {
-        headers: getAuthHeaders(),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data: ProductsResponse = await response.json()
+      const data: ProductsResponse = await apiGet(
+        API_ROUTES.PRODUCTS.LIST,
+        params
+      )
       console.log("✅ 产品数据获取成功:", data)
 
       setProducts(data.data.products)
@@ -430,11 +415,13 @@ export default function ProductsPage() {
       console.error("❌ 错误详情:", error?.message)
       console.error("❌ 错误堆栈:", error?.stack)
 
-      // 在页面上也显示错误
-      notifications.error(
-        "加载失败",
-        `获取产品数据失败: ${error?.message || "未知错误"}`
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "加载失败",
+          `获取产品数据失败: ${error?.message || "未知错误"}`
+        )
+      }
 
       setProducts([])
       setTotal(0)
@@ -446,18 +433,7 @@ export default function ProductsPage() {
   // 删除产品
   const deleteProduct = async (id: string) => {
     try {
-      const response = await fetch(
-        buildApiUrl(API_ROUTES.PRODUCTS.DELETE(id)),
-        {
-          method: "DELETE",
-          headers: getAuthHeaders(),
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
+      await apiDelete(API_ROUTES.PRODUCTS.DELETE(id))
       console.log("✅ 产品删除成功")
       notifications.success("删除成功", "商品已成功删除")
       if (selectedTemplateId) {
@@ -466,10 +442,13 @@ export default function ProductsPage() {
       }
     } catch (error) {
       console.error("❌ 产品删除失败:", error)
-      notifications.error(
-        "删除失败",
-        error instanceof Error ? error.message : "未知错误"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "删除失败",
+          error instanceof Error ? error.message : "未知错误"
+        )
+      }
     }
   }
 
@@ -478,21 +457,10 @@ export default function ProductsPage() {
     try {
       setBatchLoading(true)
 
-      const response = await fetch(
-        buildApiUrl(API_ROUTES.PRODUCTS.HARD_DELETE),
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            ids: ids,
-            templateId: selectedTemplateId,
-          }),
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
+      await apiPost(API_ROUTES.PRODUCTS.HARD_DELETE, {
+        ids: ids,
+        templateId: selectedTemplateId,
+      })
 
       console.log("✅ 批量删除成功")
       notifications.success("批量删除成功", `已成功删除 ${ids.length} 个商品`)
@@ -503,10 +471,13 @@ export default function ProductsPage() {
       }
     } catch (error) {
       console.error("❌ 批量删除失败:", error)
-      notifications.error(
-        "批量删除失败",
-        error instanceof Error ? error.message : "未知错误"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "批量删除失败",
+          error instanceof Error ? error.message : "未知错误"
+        )
+      }
     } finally {
       setBatchLoading(false)
     }
@@ -518,19 +489,11 @@ export default function ProductsPage() {
       setBatchLoading(true)
       const ids = Array.from(selectedKeys)
 
-      const response = await fetch(buildApiUrl(API_ROUTES.PRODUCTS.BATCH), {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          operation: action,
-          productIds: ids,
-          templateId: selectedTemplateId,
-        }),
+      await apiPost(API_ROUTES.PRODUCTS.BATCH, {
+        operation: action,
+        productIds: ids,
+        templateId: selectedTemplateId,
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
 
       const actionText = action === "activate" ? "启用" : "禁用"
       console.log(`✅ 批量${actionText}成功`)
@@ -546,10 +509,13 @@ export default function ProductsPage() {
     } catch (error) {
       const actionText = action === "activate" ? "启用" : "禁用"
       console.error(`❌ 批量${actionText}失败:`, error)
-      notifications.error(
-        `批量${actionText}失败`,
-        error instanceof Error ? error.message : "未知错误"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          `批量${actionText}失败`,
+          error instanceof Error ? error.message : "未知错误"
+        )
+      }
     } finally {
       setBatchLoading(false)
     }
@@ -560,19 +526,7 @@ export default function ProductsPage() {
     if (!editingProduct) return
 
     try {
-      const response = await fetch(
-        buildApiUrl(API_ROUTES.PRODUCTS.UPDATE(editingProduct._id)),
-        {
-          method: "PUT",
-          headers: getAuthHeaders(),
-          body: JSON.stringify(productData),
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
+      await apiPut(API_ROUTES.PRODUCTS.UPDATE(editingProduct._id), productData)
       console.log("✅ 商品更新成功")
       notifications.success("更新成功", "商品信息已成功更新")
       setEditingProduct(null)
@@ -583,10 +537,13 @@ export default function ProductsPage() {
       }
     } catch (error) {
       console.error("❌ 商品更新失败:", error)
-      notifications.error(
-        "更新失败",
-        error instanceof Error ? error.message : "未知错误"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "更新失败",
+          error instanceof Error ? error.message : "未知错误"
+        )
+      }
     }
   }
 
@@ -595,16 +552,7 @@ export default function ProductsPage() {
     productData: Omit<Product, "_id" | "createdAt" | "updatedAt">
   ) => {
     try {
-      const response = await fetch(buildApiUrl(API_ROUTES.PRODUCTS.CREATE), {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(productData),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
+      await apiPost(API_ROUTES.PRODUCTS.CREATE, productData)
       console.log("✅ 商品创建成功")
       notifications.success("创建成功", "新商品已成功创建")
       onCreateClose()
@@ -614,10 +562,13 @@ export default function ProductsPage() {
       }
     } catch (error) {
       console.error("❌ 商品创建失败:", error)
-      notifications.error(
-        "创建失败",
-        error instanceof Error ? error.message : "未知错误"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "创建失败",
+          error instanceof Error ? error.message : "未知错误"
+        )
+      }
     }
   }
 
@@ -631,9 +582,10 @@ export default function ProductsPage() {
     try {
       setAllIdsLoading(true)
 
-      const baseUrl = buildApiUrl(API_ROUTES.PRODUCTS.ALL_IDS)
-      const url = new URL(baseUrl)
-      url.searchParams.set("templateId", selectedTemplateId)
+      // 构建查询参数
+      const params: any = {
+        templateId: selectedTemplateId,
+      }
 
       // 添加过滤器参数
       Object.entries(searchFilters).forEach(([key, value]) => {
@@ -642,31 +594,23 @@ export default function ProductsPage() {
             // 处理范围类型的过滤器
             Object.entries(value).forEach(([subKey, subValue]) => {
               if (subValue !== undefined && subValue !== null) {
-                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+                params[`${key}.${subKey}`] = subValue.toString()
               }
             })
           } else {
-            url.searchParams.set(key, value.toString())
+            params[key] = value.toString()
           }
         }
       })
 
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        headers: getAuthHeaders(),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = await apiGet(API_ROUTES.PRODUCTS.ALL_IDS, params)
       setAllProductIds(data.data?.ids || [])
       console.log("✅ 商品ID获取成功", {
         count: data.data?.ids?.length || 0,
       })
     } catch (error) {
       console.error("❌ 商品ID获取失败:", error)
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
       setAllProductIds([])
     } finally {
       setAllIdsLoading(false)
@@ -683,9 +627,10 @@ export default function ProductsPage() {
     try {
       setAllIdsLoading(true)
 
-      const baseUrl = buildApiUrl(API_ROUTES.PRODUCTS.ALL_IDS)
-      const url = new URL(baseUrl)
-      url.searchParams.set("templateId", selectedTemplateId)
+      // 构建查询参数
+      const params: any = {
+        templateId: selectedTemplateId,
+      }
 
       // 添加过滤器参数
       Object.entries(filters).forEach(([key, value]) => {
@@ -694,31 +639,26 @@ export default function ProductsPage() {
             // 处理范围类型的过滤器
             Object.entries(value).forEach(([subKey, subValue]) => {
               if (subValue !== undefined && subValue !== null) {
-                url.searchParams.set(`${key}.${subKey}`, subValue.toString())
+                params[`${key}.${subKey}`] = subValue.toString()
               }
             })
           } else {
-            url.searchParams.set(key, value.toString())
+            params[key] = value.toString()
           }
         }
       })
 
-      const response = await fetch(url.toString(), {
-        headers: getAuthHeaders(),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = await apiGet(API_ROUTES.PRODUCTS.ALL_IDS, params)
       setAllProductIds(data.data.ids)
     } catch (error: any) {
       console.error("❌ 获取商品ID列表失败:", error)
-      notifications.error(
-        "获取失败",
-        `获取商品ID列表失败: ${error?.message || "未知错误"}`
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "获取失败",
+          `获取商品ID列表失败: ${error?.message || "未知错误"}`
+        )
+      }
       setAllProductIds([])
     } finally {
       setAllIdsLoading(false)
@@ -1145,10 +1085,11 @@ export default function ProductsPage() {
                       </div>
                     </TableColumn>
                     <TableColumn>商品信息</TableColumn>
+                    <TableColumn width={120}>公司价</TableColumn>
+                    <TableColumn width={120}>批发价</TableColumn>
                     <TableColumn>品牌/企业</TableColumn>
-                    <TableColumn>编码信息</TableColumn>
-                    <TableColumn>规格</TableColumn>
-                    <TableColumn>价格信息</TableColumn>
+                    <TableColumn width={160}>编码信息</TableColumn>
+                    <TableColumn width={180}>规格</TableColumn>
                     <TableColumn>特性</TableColumn>
                     <TableColumn>状态</TableColumn>
                     <TableColumn width={120}>操作</TableColumn>
@@ -1185,6 +1126,86 @@ export default function ProductsPage() {
                             </div>
                           </div>
                         </TableCell>
+                        {/* 公司价列 */}
+                        <TableCell>
+                          <div className="flex flex-col">
+                            {/* 公司价 - 主要显示 */}
+                            {product.pricing?.companyPrice ? (
+                              <div className="text-base font-bold text-primary">
+                                ¥{product.pricing.companyPrice}
+                                <span className="ml-1 text-xs text-default-500">
+                                  /{product.pricing.unit || "条"}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-default-400">
+                                暂无公司价
+                              </div>
+                            )}
+
+                            {/* 零售价和价格类型在同一行 */}
+                            <div className="mt-1 flex items-center gap-2">
+                              {product.pricing?.retailPrice && (
+                                <span className="whitespace-nowrap text-xs text-default-500">
+                                  零售价: ¥{product.pricing.retailPrice}
+                                </span>
+                              )}
+
+                              {product.pricing?.priceCategory && (
+                                <Chip
+                                  size="sm"
+                                  variant="flat"
+                                  color={
+                                    product.pricing.priceCategory === "一类"
+                                      ? "success"
+                                      : product.pricing.priceCategory === "二类"
+                                        ? "warning"
+                                        : "default"
+                                  }
+                                >
+                                  {product.pricing.priceCategory}
+                                </Chip>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* 批发价列 */}
+                        <TableCell>
+                          <div className="flex flex-col">
+                            {/* 批发价 - 简洁显示 */}
+                            {product.wholesale?.price ? (
+                              <>
+                                <div className="text-base font-bold text-success">
+                                  ¥{product.wholesale.price}
+                                </div>
+                                {product.wholesale.updatedAt && (
+                                  <div className="mt-1 text-xs text-default-500">
+                                    <div className="whitespace-nowrap">
+                                      {new Date(
+                                        product.wholesale.updatedAt
+                                      ).toLocaleDateString("zh-CN")}
+                                    </div>
+                                    <div className="whitespace-nowrap">
+                                      {new Date(
+                                        product.wholesale.updatedAt
+                                      ).toLocaleTimeString("zh-CN", {
+                                        hour12: false,
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        second: "2-digit",
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-sm text-default-400">
+                                暂无批发价
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div>
                             <p className="font-medium">
@@ -1200,7 +1221,7 @@ export default function ProductsPage() {
                         <TableCell>
                           <div className="space-y-1">
                             {product.productCode && (
-                              <div>
+                              <div className="whitespace-nowrap">
                                 <span className="text-xs text-default-500">
                                   产品码:
                                 </span>
@@ -1210,7 +1231,7 @@ export default function ProductsPage() {
                               </div>
                             )}
                             {product.boxCode && (
-                              <div>
+                              <div className="whitespace-nowrap">
                                 <span className="text-xs text-default-500">
                                   盒码:
                                 </span>
@@ -1222,54 +1243,21 @@ export default function ProductsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1 text-xs">
+                          <div className="flex flex-col gap-1 text-xs">
                             {product.specifications?.circumference && (
-                              <div>
+                              <div className="whitespace-nowrap">
                                 周长: {product.specifications.circumference}mm
                               </div>
                             )}
                             {product.specifications?.length && (
-                              <div>长度: {product.specifications.length}</div>
+                              <div className="whitespace-nowrap">
+                                长度: {product.specifications.length}
+                              </div>
                             )}
                             {product.specifications?.packageQuantity && (
-                              <div>
+                              <div className="whitespace-nowrap">
                                 {product.specifications.packageQuantity}支装
                               </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            {/* 公司价 - 主要显示 */}
-                            {product.pricing?.companyPrice && (
-                              <div className="text-base font-bold text-primary">
-                                ¥{product.pricing.companyPrice}
-                                <span className="ml-1 text-xs text-default-500">
-                                  公司价/{product.pricing.unit || "条"}
-                                </span>
-                              </div>
-                            )}
-                            {/* 零售价 - 次要显示 */}
-                            {product.pricing?.retailPrice && (
-                              <div className="text-sm text-default-500">
-                                零售价: ¥{product.pricing.retailPrice}
-                              </div>
-                            )}
-                            {/* 价格类型 */}
-                            {product.pricing?.priceCategory && (
-                              <Chip
-                                size="sm"
-                                variant="flat"
-                                color={
-                                  product.pricing.priceCategory === "一类"
-                                    ? "success"
-                                    : product.pricing.priceCategory === "二类"
-                                      ? "warning"
-                                      : "default"
-                                }
-                              >
-                                {product.pricing.priceCategory}
-                              </Chip>
                             )}
                           </div>
                         </TableCell>

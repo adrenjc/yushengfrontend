@@ -47,7 +47,7 @@ import {
 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
-import { buildApiUrl } from "@/lib/api"
+import { buildApiUrl, apiGet, apiPost, apiPut, apiDelete } from "@/lib/api"
 import { getAuthHeaders } from "@/lib/auth"
 
 interface ProductTemplate {
@@ -191,41 +191,26 @@ export default function TemplatesPage() {
   const fetchTemplates = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams({
+      const params = {
         page: currentPage.toString(),
         limit: pageSize.toString(),
         ...(searchQuery && { search: searchQuery }),
         ...(categoryFilter !== "all" && { category: categoryFilter }),
         ...(statusFilter !== "all" && { isActive: statusFilter }),
-      })
-
-      const response = await fetch(buildApiUrl(`/templates?${params}`), {
-        headers: getAuthHeaders(),
-      })
-
-      if (!response.ok) {
-        // 尝试解析后端返回的错误信息
-        let errorMessage = "无法获取模板列表"
-        try {
-          const errorData = await response.json()
-          if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        } catch (parseError) {
-          console.warn("无法解析错误响应:", parseError)
-        }
-        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      const data = await apiGet("/templates", params)
       setTemplates(data.data.templates || [])
       setTotal(data.data.pagination.total || 0)
     } catch (error) {
       console.error("❌ 获取模板列表失败:", error)
-      notifications.error(
-        "加载失败",
-        (error as Error).message || "无法获取模板列表"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "加载失败",
+          (error as Error).message || "无法获取模板列表"
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -240,36 +225,20 @@ export default function TemplatesPage() {
 
     setSubmitLoading(true)
     try {
-      const response = await fetch(buildApiUrl("/templates"), {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(formData),
-      })
-
-      if (!response.ok) {
-        // 尝试解析后端返回的错误信息
-        let errorMessage = "无法创建模板"
-        try {
-          const errorData = await response.json()
-          if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        } catch (parseError) {
-          console.warn("无法解析错误响应:", parseError)
-        }
-        throw new Error(errorMessage)
-      }
-
+      await apiPost("/templates", formData)
       notifications.success("创建成功", "模板已创建")
       onCreateClose()
       setFormData(defaultFormData)
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 创建模板失败:", error)
-      notifications.error(
-        "创建失败",
-        (error as Error).message || "无法创建模板"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "创建失败",
+          (error as Error).message || "无法创建模板"
+        )
+      }
     } finally {
       setSubmitLoading(false)
     }
@@ -283,29 +252,7 @@ export default function TemplatesPage() {
 
     setSubmitLoading(true)
     try {
-      const response = await fetch(
-        buildApiUrl(`/templates/${editingTemplate.id}`),
-        {
-          method: "PUT",
-          headers: getAuthHeaders(),
-          body: JSON.stringify(formData),
-        }
-      )
-
-      if (!response.ok) {
-        // 尝试解析后端返回的错误信息
-        let errorMessage = "无法更新模板"
-        try {
-          const errorData = await response.json()
-          if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        } catch (parseError) {
-          console.warn("无法解析错误响应:", parseError)
-        }
-        throw new Error(errorMessage)
-      }
-
+      await apiPut(`/templates/${editingTemplate.id}`, formData)
       notifications.success("更新成功", "模板已更新")
       onEditClose()
       setEditingTemplate(null)
@@ -313,10 +260,13 @@ export default function TemplatesPage() {
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 更新模板失败:", error)
-      notifications.error(
-        "更新失败",
-        (error as Error).message || "无法更新模板"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "更新失败",
+          (error as Error).message || "无法更新模板"
+        )
+      }
     } finally {
       setSubmitLoading(false)
     }
@@ -328,38 +278,20 @@ export default function TemplatesPage() {
 
     setSubmitLoading(true)
     try {
-      const response = await fetch(
-        buildApiUrl(`/templates/${deletingTemplate.id}`),
-        {
-          method: "DELETE",
-          headers: getAuthHeaders(),
-        }
-      )
-
-      if (!response.ok) {
-        // 尝试解析后端返回的错误信息
-        let errorMessage = "无法删除模板"
-        try {
-          const errorData = await response.json()
-          if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        } catch (parseError) {
-          console.warn("无法解析错误响应:", parseError)
-        }
-        throw new Error(errorMessage)
-      }
-
+      await apiDelete(`/templates/${deletingTemplate.id}`)
       notifications.success("删除成功", "模板已删除")
       onDeleteClose()
       setDeletingTemplate(null)
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 删除模板失败:", error)
-      notifications.error(
-        "删除失败",
-        (error as Error).message || "无法删除模板"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "删除失败",
+          (error as Error).message || "无法删除模板"
+        )
+      }
     } finally {
       setSubmitLoading(false)
     }
@@ -374,29 +306,7 @@ export default function TemplatesPage() {
 
     setSubmitLoading(true)
     try {
-      const response = await fetch(
-        buildApiUrl(`/templates/${copyingTemplate.id}/copy`),
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ name: copyName }),
-        }
-      )
-
-      if (!response.ok) {
-        // 尝试解析后端返回的错误信息
-        let errorMessage = "无法复制模板"
-        try {
-          const errorData = await response.json()
-          if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        } catch (parseError) {
-          console.warn("无法解析错误响应:", parseError)
-        }
-        throw new Error(errorMessage)
-      }
-
+      await apiPost(`/templates/${copyingTemplate.id}/copy`, { name: copyName })
       notifications.success("复制成功", "模板已复制")
       onCopyClose()
       setCopyingTemplate(null)
@@ -404,10 +314,13 @@ export default function TemplatesPage() {
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 复制模板失败:", error)
-      notifications.error(
-        "复制失败",
-        (error as Error).message || "无法复制模板"
-      )
+      // 如果是认证错误，会自动处理跳转，这里不需要显示错误
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "复制失败",
+          (error as Error).message || "无法复制模板"
+        )
+      }
     } finally {
       setSubmitLoading(false)
     }
@@ -416,6 +329,7 @@ export default function TemplatesPage() {
   // 设置默认模板
   const handleSetDefault = async (template: ProductTemplate) => {
     try {
+      // 使用 apiRequest 但是 PATCH 方法，所以用 fetch 但显式处理认证错误
       const response = await fetch(
         buildApiUrl(`/templates/${template.id}/default`),
         {
@@ -425,27 +339,39 @@ export default function TemplatesPage() {
       )
 
       if (!response.ok) {
-        // 尝试解析后端返回的错误信息
-        let errorMessage = "无法设置默认模板"
+        // 尝试解析错误响应
+        let errorData = null
         try {
-          const errorData = await response.json()
-          if (errorData.message) {
-            errorMessage = errorData.message
-          }
-        } catch (parseError) {
-          console.warn("无法解析错误响应:", parseError)
+          errorData = await response.json()
+        } catch {}
+
+        // 检查是否为认证错误
+        if (response.status === 401 && errorData?.isAuthError) {
+          // 认证错误，触发登录跳转
+          const { useAuthStore } = await import("@/stores/auth")
+          const authStore = useAuthStore.getState()
+          authStore.logout()
+
+          notifications.warning("登录已过期", errorData.message || "登录已过期")
+          setTimeout(() => {
+            window.location.href = "/auth/login"
+          }, 1000)
+          return
         }
-        throw new Error(errorMessage)
+
+        throw new Error(errorData?.message || "无法设置默认模板")
       }
 
       notifications.success("设置成功", `${template.name} 已设为默认模板`)
       await fetchTemplates()
     } catch (error) {
       console.error("❌ 设置默认模板失败:", error)
-      notifications.error(
-        "设置失败",
-        (error as Error).message || "无法设置默认模板"
-      )
+      if (!(error as any)?.isAuthError) {
+        notifications.error(
+          "设置失败",
+          (error as Error).message || "无法设置默认模板"
+        )
+      }
     }
   }
 
