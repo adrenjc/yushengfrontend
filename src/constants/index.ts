@@ -73,8 +73,7 @@ export const STATUS_CONFIG = {
     FAILED: "failed",
   },
   MATCH_STATUS: {
-    PENDING: "pending",
-    REVIEWING: "reviewing",
+    PENDING: "pending", // 前端统一显示为"待审核"
     CONFIRMED: "confirmed",
     REJECTED: "rejected",
     EXCEPTION: "exception",

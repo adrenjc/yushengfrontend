@@ -13,6 +13,7 @@ import {
   LogOut,
   User,
   ListChecks,
+  Brain,
 } from "lucide-react"
 import { useAuthStore } from "@/stores/auth"
 import { useAppStore, useNotifications } from "@/stores/app"
@@ -47,10 +48,10 @@ const navigationItems: NavItem[] = [
     icon: <RefreshCw className="h-5 w-5" />,
   },
   {
-    key: "review",
-    label: "审核中心",
-    href: "/dashboard/matching/review",
-    icon: <ClipboardCheck className="h-5 w-5" />,
+    key: "memory",
+    label: "记忆库",
+    href: "/dashboard/memory",
+    icon: <Brain className="h-5 w-5" />,
   },
   // {
   //   key: "prices",

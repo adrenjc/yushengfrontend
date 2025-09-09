@@ -45,6 +45,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
 import { buildApiUrl, API_ROUTES, getAuthOnlyHeaders } from "@/lib/api"
 import { getAuthHeaders } from "@/lib/auth"
+import dynamic from "next/dynamic"
 
 interface ProductTemplate {
   id: string
@@ -138,7 +139,7 @@ const PriorityChip = ({ priority }: { priority: string }) => {
   )
 }
 
-export default function MatchingPage() {
+function MatchingPage() {
   const [tasks, setTasks] = useState<MatchingTask[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadLoading, setUploadLoading] = useState(false)
@@ -154,6 +155,7 @@ export default function MatchingPage() {
     isOpen: isUploadOpen,
     onOpen: onUploadOpen,
     onClose: onUploadClose,
+    onOpenChange: onUploadOpenChange,
   } = useDisclosure()
 
   // 删除确认弹窗状态
@@ -161,6 +163,7 @@ export default function MatchingPage() {
     isOpen: isDeleteOpen,
     onOpen: onDeleteOpen,
     onClose: onDeleteClose,
+    onOpenChange: onDeleteOpenChange,
   } = useDisclosure()
   const [taskToDelete, setTaskToDelete] = useState<MatchingTask | null>(null)
 
@@ -223,7 +226,7 @@ export default function MatchingPage() {
   const fetchTasks = async () => {
     try {
       setLoading(true)
-      const response = await fetch(buildApiUrl("/matching/tasks"), {
+      const response = await fetch(buildApiUrl("/matching/tasks?limit=1000"), {
         headers: getAuthHeaders(),
       })
 
@@ -480,27 +483,16 @@ export default function MatchingPage() {
             </Button>
           )}
 
-        {task.status === "review" && (
-          <Button
-            size="sm"
-            color="warning"
-            variant="flat"
-            as="a"
-            href={`/dashboard/matching/review?taskId=${task._id}&taskName=${encodeURIComponent(task.originalFilename)}&taskIdentifier=${encodeURIComponent(generateTaskIdentifier(task))}`}
-          >
-            审核任务
-          </Button>
-        )}
-
+        {/* 简化流程：直接进入结果管理页面 */}
         {(task.status === "completed" || task.status === "review") && (
           <Button
             size="sm"
-            color="success"
+            color="primary"
             variant="flat"
             as="a"
             href={`/dashboard/matching/results?taskId=${task._id}&taskName=${encodeURIComponent(task.originalFilename)}&taskIdentifier=${encodeURIComponent(generateTaskIdentifier(task))}`}
           >
-            查看结果
+            {task.status === "review" ? "管理匹配" : "查看结果"}
           </Button>
         )}
 
@@ -584,9 +576,12 @@ export default function MatchingPage() {
       if (processingTasks.length > 0) {
         try {
           // 静默获取最新数据，不显示加载状态
-          const response = await fetch(buildApiUrl("/matching/tasks"), {
-            headers: getAuthHeaders(),
-          })
+          const response = await fetch(
+            buildApiUrl("/matching/tasks?limit=1000"),
+            {
+              headers: getAuthHeaders(),
+            }
+          )
 
           if (response.ok) {
             const data = await response.json()
@@ -631,13 +626,13 @@ export default function MatchingPage() {
           console.error("❌ 后台刷新失败:", error)
         }
       }
-    }, 5000) // 改为5秒刷新一次，减少频率
+    }, 2000) // 改为2秒刷新一次，提高进度更新的实时性
 
     return () => clearInterval(interval)
   }, [tasks])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" suppressHydrationWarning>
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
@@ -850,243 +845,262 @@ export default function MatchingPage() {
       </Card>
 
       {/* 上传任务模态框 */}
-      <Modal isOpen={isUploadOpen} onClose={onUploadClose} size="3xl">
-        <ModalContent>
-          <ModalHeader>新建匹配任务</ModalHeader>
-          <ModalBody>
-            <Tabs defaultSelectedKey="upload">
-              <Tab key="upload" title="上传文件">
-                <div className="space-y-4">
-                  {/* 模板选择 */}
-                  <div className="rounded-lg border border-divider p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Settings className="h-5 w-5 text-primary" />
-                      <h4 className="font-medium">选择匹配模板</h4>
-                    </div>
-                    <Select
-                      placeholder="请选择商品模板"
-                      size="sm"
-                      selectedKeys={
-                        selectedTemplateId
-                          ? new Set([selectedTemplateId])
-                          : new Set()
-                      }
-                      onSelectionChange={keys => {
-                        const templateId = Array.from(keys as Set<string>)[0]
-                        if (templateId) {
-                          setSelectedTemplateId(templateId)
+      {isUploadOpen && (
+        <Modal
+          isOpen={isUploadOpen}
+          onOpenChange={onUploadOpenChange}
+          size="3xl"
+        >
+          <ModalContent aria-label="upload-modal-content">
+            <ModalHeader>新建匹配任务</ModalHeader>
+            <ModalBody>
+              <Tabs defaultSelectedKey="upload">
+                <Tab key="upload" title="上传文件">
+                  <div className="space-y-4">
+                    {/* 模板选择 */}
+                    <div className="rounded-lg border border-divider p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Settings className="h-5 w-5 text-primary" />
+                        <h4 className="font-medium">选择匹配模板</h4>
+                      </div>
+                      <Select
+                        placeholder="请选择商品模板"
+                        size="sm"
+                        selectedKeys={
+                          selectedTemplateId
+                            ? new Set([selectedTemplateId])
+                            : new Set()
                         }
-                      }}
-                      isLoading={templatesLoading}
-                      isDisabled={templatesLoading}
-                      description="选择要用于匹配的商品模板"
-                    >
-                      {templates.map(template => (
-                        <SelectItem key={template.id} textValue={template.name}>
-                          <div className="flex w-full items-center justify-between">
-                            <div>
-                              <span className="font-medium">
-                                {template.name}
-                              </span>
-                              {template.isDefault && (
-                                <Chip
-                                  size="sm"
-                                  color="primary"
-                                  variant="flat"
-                                  className="ml-2"
-                                >
-                                  默认
-                                </Chip>
-                              )}
+                        onSelectionChange={keys => {
+                          const templateId = Array.from(keys as Set<string>)[0]
+                          if (templateId) {
+                            setSelectedTemplateId(templateId)
+                          }
+                        }}
+                        isLoading={templatesLoading}
+                        isDisabled={templatesLoading}
+                        description="选择要用于匹配的商品模板"
+                      >
+                        {templates.map(template => (
+                          <SelectItem
+                            key={template.id}
+                            textValue={template.name}
+                          >
+                            <div className="flex w-full items-center justify-between">
+                              <div>
+                                <span className="font-medium">
+                                  {template.name}
+                                </span>
+                                {template.isDefault && (
+                                  <Chip
+                                    size="sm"
+                                    color="primary"
+                                    variant="flat"
+                                    className="ml-2"
+                                  >
+                                    默认
+                                  </Chip>
+                                )}
+                              </div>
+                              <div className="text-xs text-default-500">
+                                {template.statistics.productCount} 个商品
+                              </div>
                             </div>
-                            <div className="text-xs text-default-500">
-                              {template.statistics.productCount} 个商品
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </Select>
-                  </div>
-
-                  {/* 文件上传 */}
-                  {selectedTemplateId ? (
-                    <FileUpload
-                      onUploadSuccess={file => createMatchingTask(file)}
-                      acceptedFileTypes={[".xlsx", ".xls", ".csv"]}
-                      maxFileSize={10}
-                      endpoint=""
-                      customUpload
-                      isLoading={uploadLoading}
-                    />
-                  ) : (
-                    <div className="rounded-lg border-2 border-dashed border-default-300 bg-default-50 p-8 text-center">
-                      <Upload className="mx-auto mb-2 h-8 w-8 text-default-400" />
-                      <p className="text-sm text-default-500">
-                        请先选择模板，然后上传文件
-                      </p>
+                          </SelectItem>
+                        ))}
+                      </Select>
                     </div>
-                  )}
 
-                  <div className="rounded-lg bg-default-50 p-4">
-                    <h4 className="mb-2 font-medium">📋 文件格式要求</h4>
-                    <ul className="space-y-1 text-sm text-default-600">
-                      <li>
-                        • <strong>批发名</strong>: 商品的口语化名称（必填）
-                      </li>
-                      <li>
-                        • <strong>批发价格</strong>: 商品的批发价格（可选）
-                      </li>
-                      <li>
-                        • <strong>数量</strong>: 采购数量（可选）
-                      </li>
-                      <li>
-                        • <strong>供应商</strong>: 供应商信息（可选）
-                      </li>
-                    </ul>
+                    {/* 文件上传 */}
+                    {selectedTemplateId ? (
+                      <FileUpload
+                        onUploadSuccess={file => createMatchingTask(file)}
+                        acceptedFileTypes={[".xlsx", ".xls", ".csv"]}
+                        maxFileSize={10}
+                        endpoint=""
+                        customUpload
+                        isLoading={uploadLoading}
+                      />
+                    ) : (
+                      <div className="rounded-lg border-2 border-dashed border-default-300 bg-default-50 p-8 text-center">
+                        <Upload className="mx-auto mb-2 h-8 w-8 text-default-400" />
+                        <p className="text-sm text-default-500">
+                          请先选择模板，然后上传文件
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="rounded-lg bg-default-50 p-4">
+                      <h4 className="mb-2 font-medium">📋 文件格式要求</h4>
+                      <ul className="space-y-1 text-sm text-default-600">
+                        <li>
+                          • <strong>批发名</strong>: 商品的口语化名称（必填）
+                        </li>
+                        <li>
+                          • <strong>批发价格</strong>: 商品的批发价格（可选）
+                        </li>
+                        <li>
+                          • <strong>数量</strong>: 采购数量（可选）
+                        </li>
+                        <li>
+                          • <strong>供应商</strong>: 供应商信息（可选）
+                        </li>
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              </Tab>
+                </Tab>
 
-              <Tab key="config" title="匹配配置">
-                <div className="space-y-4">
-                  <Input
-                    label="匹配阈值"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={uploadConfig.threshold.toString()}
-                    onChange={e =>
-                      setUploadConfig({
-                        ...uploadConfig,
-                        threshold: Number(e.target.value),
-                      })
-                    }
-                    description="低于此分数的匹配将被标记为异常"
-                    endContent="%"
-                  />
-
-                  <Input
-                    label="自动确认阈值"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={uploadConfig.autoConfirmThreshold.toString()}
-                    onChange={e =>
-                      setUploadConfig({
-                        ...uploadConfig,
-                        autoConfirmThreshold: Number(e.target.value),
-                      })
-                    }
-                    description="高于此分数的匹配将自动确认"
-                    endContent="%"
-                  />
-
-                  <Select
-                    label="任务优先级"
-                    selectedKeys={new Set([uploadConfig.priority])}
-                    onSelectionChange={keys => {
-                      const priority = Array.from(keys as Set<string>)[0]
-                      if (priority) {
+                <Tab key="config" title="匹配配置">
+                  <div className="space-y-4">
+                    <Input
+                      label="匹配阈值"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={uploadConfig.threshold.toString()}
+                      onChange={e =>
                         setUploadConfig({
                           ...uploadConfig,
-                          priority,
+                          threshold: Number(e.target.value),
                         })
                       }
-                    }}
-                  >
-                    <SelectItem key="low">低优先级</SelectItem>
-                    <SelectItem key="normal">普通优先级</SelectItem>
-                    <SelectItem key="high">高优先级</SelectItem>
-                    <SelectItem key="urgent">紧急优先级</SelectItem>
-                  </Select>
+                      description="低于此分数的匹配将被标记为异常"
+                      endContent="%"
+                    />
 
-                  <Textarea
-                    label="任务描述"
-                    placeholder="可选的任务描述信息"
-                    value={uploadConfig.description}
-                    onChange={e =>
-                      setUploadConfig({
-                        ...uploadConfig,
-                        description: e.target.value,
-                      })
-                    }
-                    rows={3}
-                  />
-                </div>
-              </Tab>
-            </Tabs>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={onUploadClose}>
-              取消
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+                    <Input
+                      label="自动确认阈值"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={uploadConfig.autoConfirmThreshold.toString()}
+                      onChange={e =>
+                        setUploadConfig({
+                          ...uploadConfig,
+                          autoConfirmThreshold: Number(e.target.value),
+                        })
+                      }
+                      description="高于此分数的匹配将自动确认"
+                      endContent="%"
+                    />
+
+                    <Select
+                      label="任务优先级"
+                      selectedKeys={new Set([uploadConfig.priority])}
+                      onSelectionChange={keys => {
+                        const priority = Array.from(keys as Set<string>)[0]
+                        if (priority) {
+                          setUploadConfig({
+                            ...uploadConfig,
+                            priority,
+                          })
+                        }
+                      }}
+                    >
+                      <SelectItem key="low">低优先级</SelectItem>
+                      <SelectItem key="normal">普通优先级</SelectItem>
+                      <SelectItem key="high">高优先级</SelectItem>
+                      <SelectItem key="urgent">紧急优先级</SelectItem>
+                    </Select>
+
+                    <Textarea
+                      label="任务描述"
+                      placeholder="可选的任务描述信息"
+                      value={uploadConfig.description}
+                      onChange={e =>
+                        setUploadConfig({
+                          ...uploadConfig,
+                          description: e.target.value,
+                        })
+                      }
+                      rows={3}
+                    />
+                  </div>
+                </Tab>
+              </Tabs>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="light" onPress={onUploadClose}>
+                取消
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
 
       {/* 删除确认弹窗 */}
-      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} size="md">
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-danger" />
-              <span>确认删除匹配任务</span>
-            </div>
-          </ModalHeader>
-          <ModalBody>
-            <div className="space-y-4">
-              {taskToDelete && (
-                <div className="rounded-lg bg-default-50 p-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-default-500" />
-                      <span className="font-medium">
-                        {taskToDelete.originalFilename}
-                      </span>
+      {isDeleteOpen && (
+        <Modal
+          isOpen={isDeleteOpen}
+          onOpenChange={onDeleteOpenChange}
+          size="md"
+        >
+          <ModalContent aria-label="delete-modal-content">
+            <ModalHeader className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-danger" />
+                <span>确认删除匹配任务</span>
+              </div>
+            </ModalHeader>
+            <ModalBody>
+              <div className="space-y-4">
+                {taskToDelete && (
+                  <div className="rounded-lg bg-default-50 p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-default-500" />
+                        <span className="font-medium">
+                          {taskToDelete.originalFilename}
+                        </span>
+                      </div>
+                      <div className="text-sm text-default-500">
+                        <div>任务ID: {taskToDelete._id}</div>
+                        <div>
+                          创建时间: {formatDate(taskToDelete.createdAt)}
+                        </div>
+                        <div>
+                          状态: <StatusChip status={taskToDelete.status} />
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-sm text-default-500">
-                      <div>任务ID: {taskToDelete._id}</div>
-                      <div>创建时间: {formatDate(taskToDelete.createdAt)}</div>
-                      <div>
-                        状态: <StatusChip status={taskToDelete.status} />
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-danger-200 bg-danger-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-danger" />
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-danger">警告</h4>
+                      <div className="text-sm text-danger-600">
+                        <p>删除此匹配任务将会：</p>
+                        <ul className="mt-2 list-inside list-disc space-y-1">
+                          <li>永久删除任务及其所有匹配记录</li>
+                          <li>删除相关的审核历史和统计数据</li>
+                          <li>此操作无法撤销</li>
+                        </ul>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
-
-              <div className="rounded-lg border border-danger-200 bg-danger-50 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-danger" />
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-danger">警告</h4>
-                    <div className="text-sm text-danger-600">
-                      <p>删除此匹配任务将会：</p>
-                      <ul className="mt-2 list-inside list-disc space-y-1">
-                        <li>永久删除任务及其所有匹配记录</li>
-                        <li>删除相关的审核历史和统计数据</li>
-                        <li>此操作无法撤销</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
               </div>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={onDeleteClose}>
-              取消
-            </Button>
-            <Button
-              color="danger"
-              onPress={confirmDeleteTask}
-              startContent={<XCircle className="h-4 w-4" />}
-            >
-              确认删除
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="light" onPress={onDeleteClose}>
+                取消
+              </Button>
+              <Button
+                color="danger"
+                onPress={confirmDeleteTask}
+                startContent={<XCircle className="h-4 w-4" />}
+              >
+                确认删除
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
     </div>
   )
 }
+
+export default dynamic(() => Promise.resolve(MatchingPage), { ssr: false })

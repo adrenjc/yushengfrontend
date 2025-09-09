@@ -104,8 +104,7 @@ export interface MatchingRecord {
     confidence: number
   } | null
   status:
-    | "pending"
-    | "reviewing"
+    | "pending" // 在前端显示为"待审核"
     | "confirmed"
     | "rejected"
     | "exception"
