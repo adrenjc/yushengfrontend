@@ -97,7 +97,7 @@ const mockReviewItems: MatchingRecord[] = [
       },
     ],
     selectedMatch: null,
-    status: "reviewing",
+    status: "pending",
     priority: "medium",
     reviewHistory: [],
     createdAt: "2024-11-26T10:30:00Z",
@@ -128,7 +128,7 @@ const mockReviewItems: MatchingRecord[] = [
       },
     ],
     selectedMatch: null,
-    status: "reviewing",
+    status: "pending",
     priority: "high",
     reviewHistory: [],
     createdAt: "2024-11-26T09:15:00Z",
@@ -169,7 +169,7 @@ const mockReviewItems: MatchingRecord[] = [
       },
     ],
     selectedMatch: null,
-    status: "reviewing",
+    status: "pending",
     priority: "low",
     exceptions: ["价格差异较大"],
     reviewHistory: [],
@@ -180,7 +180,7 @@ const mockReviewItems: MatchingRecord[] = [
 
 const StatusChip = ({ status }: { status: string }) => {
   const config = {
-    reviewing: {
+    pending: {
       color: "warning" as const,
       label: "待审核",
       icon: <Clock className="h-3 w-3" />,
@@ -203,7 +203,7 @@ const StatusChip = ({ status }: { status: string }) => {
   }
 
   const { color, label, icon } =
-    config[status as keyof typeof config] || config.reviewing
+    config[status as keyof typeof config] || config.pending
 
   return (
     <Chip variant="flat" color={color} size="sm" startContent={icon}>
@@ -427,7 +427,7 @@ export default function ReviewPage() {
           </div>
         )
       case "actions":
-        if (item.status === "reviewing") {
+        if (item.status === "pending") {
           return (
             <div className="flex items-center gap-1">
               <Button
@@ -521,7 +521,7 @@ export default function ReviewPage() {
             size="sm"
           >
             <SelectItem key="all">全部</SelectItem>
-            <SelectItem key="reviewing">待审核</SelectItem>
+            <SelectItem key="pending">待审核</SelectItem>
             <SelectItem key="approved">已通过</SelectItem>
             <SelectItem key="rejected">已拒绝</SelectItem>
           </Select>
@@ -565,7 +565,7 @@ export default function ReviewPage() {
         <div className="mb-2 flex items-center gap-2">
           <h1 className="text-2xl font-bold">审核中心</h1>
           <Badge
-            content={reviewItems.filter(i => i.status === "reviewing").length}
+            content={reviewItems.filter(i => i.status === "pending").length}
             color="warning"
           >
             <ClipboardCheck className="h-6 w-6 text-primary" />
@@ -584,7 +584,7 @@ export default function ReviewPage() {
             <div>
               <p className="text-sm text-default-500">待审核</p>
               <p className="text-xl font-bold">
-                {reviewItems.filter(i => i.status === "reviewing").length}
+                {reviewItems.filter(i => i.status === "pending").length}
               </p>
             </div>
           </CardBody>

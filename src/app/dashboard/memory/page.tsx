@@ -52,11 +52,14 @@ import {
   Package,
   Info,
   HelpCircle,
+  ArrowRight,
+  CheckCircle,
 } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useNotifications } from "@/stores/app"
 import { buildApiUrl } from "@/lib/api"
 import { getAuthHeaders } from "@/lib/auth"
+import { MatchingMemory } from "@/types"
 
 // 接口定义
 interface ProductTemplate {
@@ -64,48 +67,6 @@ interface ProductTemplate {
   id?: string
   name: string
   isDefault?: boolean
-}
-
-interface MatchingMemory {
-  _id: string
-  normalizedWholesaleName: string
-  originalWholesaleName: string
-  confirmedProductId: {
-    _id: string
-    name: string
-    brand: string
-    company: string
-    productCode: string
-    boxCode: string
-  }
-  confidence: number
-  source: "auto" | "manual" | "expert" | "learned"
-  confirmCount: number
-  lastConfirmedAt: string
-  confirmedBy: {
-    _id: string
-    name: string
-    email: string
-  }
-  weight: number
-  isUserPreference: boolean
-  status: "active" | "deprecated" | "conflicted"
-  metadata: {
-    usageStats: {
-      totalUsed: number
-      successRate: number
-      lastUsedAt: string
-    }
-    conflicts: Array<{
-      conflictingProductId: string
-      conflictReason: string
-      reportedAt: string
-    }>
-  }
-  trustScore: number
-  isHighTrust: boolean
-  createdAt: string
-  updatedAt: string
 }
 
 // 状态芯片组件
@@ -127,20 +88,40 @@ const StatusChip = ({ status }: { status: string }) => {
 }
 
 // 来源芯片组件
-const SourceChip = ({ source }: { source: string }) => {
+// 原始匹配类型显示组件
+const MatchTypeChip = ({ matchType }: { matchType?: string }) => {
   const config = {
-    auto: { color: "primary" as const, label: "自动学习", icon: "🤖" },
-    manual: { color: "secondary" as const, label: "人工确认", icon: "👤" },
-    expert: { color: "warning" as const, label: "专家标注", icon: "🎯" },
-    learned: { color: "success" as const, label: "机器学习", icon: "🧠" },
+    auto: { color: "primary" as const, label: "自动匹配" },
+    memory: { color: "success" as const, label: "记忆匹配" },
+    manual: { color: "warning" as const, label: "手动匹配" },
+    unknown: { color: "default" as const, label: "未知类型" },
   }
 
-  const { color, label, icon } =
+  const { color, label } =
+    config[matchType as keyof typeof config] || config.unknown
+
+  return (
+    <Chip variant="flat" color={color} size="sm">
+      {label}
+    </Chip>
+  )
+}
+
+// 学习方式显示组件（用于筛选器）
+const LearningMethodChip = ({ source }: { source: string }) => {
+  const config = {
+    manual: { color: "secondary" as const, label: "手动学习" },
+    expert: { color: "warning" as const, label: "专家验证" },
+    imported: { color: "primary" as const, label: "批量导入" },
+    migrated: { color: "default" as const, label: "数据迁移" },
+  }
+
+  const { color, label } =
     config[source as keyof typeof config] || config.manual
 
   return (
     <Chip variant="flat" color={color} size="sm">
-      {icon} {label}
+      {label}
     </Chip>
   )
 }
@@ -182,9 +163,9 @@ export default function MemoryManagementPage() {
   const [memories, setMemories] = useState<MatchingMemory[]>([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("active")
   const [sourceFilter, setSourceFilter] = useState("all")
-  const [sortBy, setSortBy] = useState("trustScore_desc")
+  const [sortBy, setSortBy] = useState("lastUsed_desc")
 
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1)
@@ -202,17 +183,16 @@ export default function MemoryManagementPage() {
   const editModal = useDisclosure()
   const deleteModal = useDisclosure()
   const clearAllModal = useDisclosure()
+  const reselectProductModal = useDisclosure()
   const [selectedMemory, setSelectedMemory] = useState<MatchingMemory | null>(
     null
   )
 
-  // 编辑表单状态
+  // 编辑表单状态（简化版）
   const [editForm, setEditForm] = useState({
     confidence: 0,
     weight: 1.0,
     status: "active",
-    selectedProductId: "",
-    templateId: "",
   })
 
   // 商品搜索状态
@@ -230,6 +210,23 @@ export default function MemoryManagementPage() {
 
   // 通知系统
   const notifications = useNotifications()
+
+  // 生成任务唯一标识
+  const generateTaskIdentifier = (createdAt: string, taskId: string) => {
+    const date = new Date(createdAt)
+      .toLocaleDateString("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+      })
+      .replace(/\//g, "")
+    const time = new Date(createdAt)
+      .toLocaleTimeString("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+      .replace(/:/g, "")
+    return `${date}-${time}-${taskId.slice(-4)}`
+  }
 
   // 获取模板ID的辅助函数
   const getTemplateId = (template: ProductTemplate): string => {
@@ -423,33 +420,41 @@ export default function MemoryManagementPage() {
       return
     }
 
-    // 使用当前选择的模板ID，按优先级获取
-    let currentTemplateId =
-      editForm.templateId || selectedTemplateId || getTemplateId(templates[0])
+    // 使用当前选择的模板ID
+    let currentTemplateId = selectedTemplateId || getTemplateId(templates[0])
 
-    // 如果没有模板ID，尝试强制更新编辑表单中的模板ID
+    // 如果没有模板ID，尝试自动设置
     if (!currentTemplateId && templates.length > 0) {
       const fallbackTemplateId = getTemplateId(templates[0])
       if (fallbackTemplateId) {
-        setEditForm(prev => ({ ...prev, templateId: fallbackTemplateId }))
+        console.log("🔧 自动设置模板ID:", fallbackTemplateId)
+        setSelectedTemplateId(fallbackTemplateId)
         currentTemplateId = fallbackTemplateId
       }
     }
 
     if (!currentTemplateId) {
-      notifications.warning("模板加载中", "请等待模板加载完成后再搜索")
+      console.warn("⚠️ 无法获取模板ID:", {
+        selectedTemplateId: selectedTemplateId,
+        templatesLength: templates.length,
+        firstTemplate: templates[0] ? getTemplateId(templates[0]) : "无",
+      })
+      notifications.warning("模板缺失", "请先选择一个模板，然后重试搜索")
       setSearchResults([])
       return
     }
 
-    // 验证模板ID格式 - 确保是有效的非空字符串
-
+    // 验证模板ID格式 - 放宽验证条件
     if (
       typeof currentTemplateId !== "string" ||
       currentTemplateId.trim() === "" ||
-      currentTemplateId.length < 10
+      currentTemplateId.length < 8 // 放宽长度要求
     ) {
-      console.error("❌ 模板ID验证失败")
+      console.error("❌ 模板ID验证失败:", {
+        templateId: currentTemplateId,
+        type: typeof currentTemplateId,
+        length: currentTemplateId?.length,
+      })
       notifications.error("模板错误", "模板ID格式无效，请重新选择模板")
       setSearchResults([])
       return
@@ -463,13 +468,24 @@ export default function MemoryManagementPage() {
         `/products/search?q=${encodeURIComponent(searchTerm)}&templateId=${encodeURIComponent(currentTemplateId)}&limit=10`
       )
 
+      console.log("🔍 开始搜索商品:", {
+        searchTerm,
+        templateId: currentTemplateId,
+        url: searchUrl,
+      })
+
       const response = await fetch(searchUrl, {
         headers: getAuthHeaders(),
       })
 
       if (!response.ok) {
         const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
+        console.error("❌ 搜索API错误:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        })
+        throw new Error(`搜索失败 (${response.status}): ${errorText}`)
       }
 
       const data = await response.json()
@@ -520,23 +536,15 @@ export default function MemoryManagementPage() {
     }, 800) // 800ms 防抖延迟
   }, [])
 
-  // 编辑记忆
+  // 编辑记忆（简化版）
   const editMemory = async () => {
     if (!selectedMemory) return
 
     try {
-      const updateData: any = {
+      const updateData = {
         confidence: editForm.confidence,
         weight: editForm.weight,
         status: editForm.status,
-      }
-
-      // 如果选择了新的商品，添加商品ID
-      if (
-        editForm.selectedProductId &&
-        editForm.selectedProductId !== selectedMemory.confirmedProductId._id
-      ) {
-        updateData.confirmedProductId = editForm.selectedProductId
       }
 
       const response = await fetch(
@@ -552,12 +560,43 @@ export default function MemoryManagementPage() {
         throw new Error(`HTTP ${response.status}`)
       }
 
-      notifications.success("编辑成功", "记忆已更新")
+      notifications.success("编辑成功", "记忆参数已更新")
       editModal.onClose()
       await fetchMemories()
     } catch (error) {
       console.error("❌ 编辑记忆失败:", error)
       notifications.error("编辑失败", "无法更新记忆")
+    }
+  }
+
+  // 重选商品函数
+  const updateProductSelection = async (newProductId: string) => {
+    if (!selectedMemory) return
+
+    try {
+      const updateData = {
+        confirmedProductId: newProductId,
+      }
+
+      const response = await fetch(
+        buildApiUrl(`/matching/memories/${selectedMemory._id}`),
+        {
+          method: "PATCH",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(updateData),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      notifications.success("重选成功", "商品匹配已更新")
+      reselectProductModal.onClose()
+      await fetchMemories()
+    } catch (error) {
+      console.error("❌ 重选商品失败:", error)
+      notifications.error("重选失败", "无法更新商品匹配")
     }
   }
 
@@ -586,41 +625,104 @@ export default function MemoryManagementPage() {
     }
   }
 
-  // 当选择记忆进行编辑时，初始化编辑表单
+  // 当选择记忆进行编辑时，初始化编辑表单（简化版）
   const handleEditMemory = (memory: MatchingMemory) => {
-    // 确保templateId有值，优先使用当前选择的模板
-    let templateId = selectedTemplateId || getTemplateId(templates[0]) || ""
-
-    // 如果还是没有模板ID，强制等待模板加载
-    if (!templateId && templates.length === 0) {
-      notifications.warning("模板加载中", "请等待模板加载完成后再编辑")
-      return
-    }
-
-    // 再次尝试获取模板ID
-    if (!templateId && templates.length > 0) {
-      templateId = getTemplateId(templates[0])
-    }
-
     const editFormData = {
       confidence: memory.confidence,
       weight: Number(memory.weight.toFixed(1)), // 限制为1位小数
       status: memory.status,
-      selectedProductId: memory.confirmedProductId._id,
-      templateId: templateId,
     }
 
     setSelectedMemory(memory)
     setEditForm(editFormData)
-    setProductSearchTerm("")
-    setSearchResults([])
-
-    // 如果没有templateId，显示警告
-    if (!templateId) {
-      notifications.warning("模板缺失", "请先选择一个模板")
-    }
 
     editModal.onOpen()
+  }
+
+  // 重选商品处理函数
+  const handleReselectProduct = (memory: MatchingMemory) => {
+    setSelectedMemory(memory)
+    setProductSearchTerm("")
+    setSearchResults([])
+    reselectProductModal.onOpen()
+  }
+
+  // 检查是否存在同名的活跃记忆
+  const hasActiveMemoryWithSameName = (
+    targetMemory: MatchingMemory
+  ): boolean => {
+    return memories.some(
+      memory =>
+        memory._id !== targetMemory._id && // 不是同一条记忆
+        memory.normalizedWholesaleName ===
+          targetMemory.normalizedWholesaleName &&
+        memory.status === "active"
+    )
+  }
+
+  // 处理冲突的记忆恢复
+  const handleConflictRestore = (memory: MatchingMemory) => {
+    const conflictingMemory = memories.find(
+      m =>
+        m._id !== memory._id &&
+        m.normalizedWholesaleName === memory.normalizedWholesaleName &&
+        m.status === "active"
+    )
+
+    if (conflictingMemory) {
+      notifications.warning(
+        "记忆冲突",
+        `已存在活跃的"${memory.originalWholesaleName}"记忆（匹配商品：${conflictingMemory.confirmedProductId.name}）。请先处理现有活跃记忆再恢复此记忆。`,
+        12000
+      )
+    } else {
+      notifications.error("检测错误", "无法找到冲突记忆，请刷新页面后重试")
+    }
+  }
+
+  // 恢复废弃记忆
+  const handleRestoreMemory = async (memory: MatchingMemory) => {
+    try {
+      const updateData = {
+        status: "active",
+      }
+
+      const response = await fetch(
+        buildApiUrl(`/matching/memories/${memory._id}`),
+        {
+          method: "PATCH",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(updateData),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      notifications.success(
+        "恢复成功",
+        `记忆"${memory.originalWholesaleName}"已恢复为活跃状态`
+      )
+      await fetchMemories()
+    } catch (error) {
+      console.error("❌ 恢复记忆失败:", error)
+      const errorMessage =
+        error instanceof Error ? error.message : "无法恢复记忆状态"
+
+      if (
+        errorMessage.includes("数据库操作失败") ||
+        errorMessage.includes("duplicate")
+      ) {
+        notifications.error(
+          "恢复失败",
+          `已存在同名的活跃记忆"${memory.originalWholesaleName}"，无法恢复废弃记忆`
+        )
+      } else {
+        notifications.error("恢复失败", errorMessage)
+      }
+    }
   }
 
   // 初始化加载模板（添加重试机制）
@@ -865,7 +967,7 @@ export default function MemoryManagementPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Input
-                placeholder="输入关键词自动搜索批发名、商品名、品牌..."
+                placeholder="输入关键词自动搜索批发名、商品名、品牌、条码、盒码..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 startContent={<Search className="h-4 w-4 text-default-400" />}
@@ -873,6 +975,7 @@ export default function MemoryManagementPage() {
                 variant="bordered"
                 isClearable
                 onClear={() => setSearchTerm("")}
+                description="支持搜索批发名、商品名、品牌、条码、盒码等信息"
               />
             </div>
 
@@ -880,7 +983,7 @@ export default function MemoryManagementPage() {
               <Select
                 label="状态"
                 size="sm"
-                selectedKeys={[statusFilter]}
+                selectedKeys={statusFilter ? [statusFilter] : []}
                 onChange={e => {
                   const newValue = e.target.value
                   // 如果新值为空或未定义，保持当前状态不变
@@ -896,9 +999,9 @@ export default function MemoryManagementPage() {
               </Select>
 
               <Select
-                label="来源"
+                label="匹配方式"
                 size="sm"
-                selectedKeys={[sourceFilter]}
+                selectedKeys={sourceFilter ? [sourceFilter] : []}
                 onChange={e => {
                   const newValue = e.target.value
                   // 如果新值为空或未定义，保持当前状态不变
@@ -907,17 +1010,17 @@ export default function MemoryManagementPage() {
                   }
                 }}
               >
-                <SelectItem key="all">全部来源</SelectItem>
-                <SelectItem key="manual">人工确认</SelectItem>
-                <SelectItem key="auto">自动学习</SelectItem>
-                <SelectItem key="expert">专家标注</SelectItem>
-                <SelectItem key="learned">机器学习</SelectItem>
+                <SelectItem key="all">全部匹配</SelectItem>
+                <SelectItem key="auto">自动匹配</SelectItem>
+                <SelectItem key="memory">记忆匹配</SelectItem>
+                <SelectItem key="manual">手动匹配</SelectItem>
+                <SelectItem key="unknown">未知类型</SelectItem>
               </Select>
 
               <Select
                 label="排序方式"
                 size="sm"
-                selectedKeys={[sortBy]}
+                selectedKeys={sortBy ? [sortBy] : []}
                 onChange={e => {
                   const newValue = e.target.value
                   // 如果新值为空或未定义，保持当前状态不变
@@ -926,13 +1029,13 @@ export default function MemoryManagementPage() {
                   }
                 }}
               >
+                <SelectItem key="lastUsed_desc">操作时间 (新→旧)</SelectItem>
+                <SelectItem key="created_desc">创建时间 (新→旧)</SelectItem>
                 <SelectItem key="trustScore_desc">可信度 (高→低)</SelectItem>
                 <SelectItem key="trustScore_asc">可信度 (低→高)</SelectItem>
                 <SelectItem key="confirmCount_desc">
                   确认次数 (多→少)
                 </SelectItem>
-                <SelectItem key="lastUsed_desc">最近使用</SelectItem>
-                <SelectItem key="created_desc">创建时间 (新→旧)</SelectItem>
               </Select>
 
               <div className="flex items-end">
@@ -943,7 +1046,7 @@ export default function MemoryManagementPage() {
                     setSearchTerm("")
                     setStatusFilter("all")
                     setSourceFilter("all")
-                    setSortBy("trustScore_desc")
+                    setSortBy("lastUsed_desc")
                   }}
                 >
                   重置筛选
@@ -988,9 +1091,9 @@ export default function MemoryManagementPage() {
                   <TableColumn>匹配商品</TableColumn>
                   <TableColumn>可信度</TableColumn>
                   <TableColumn>确认次数</TableColumn>
-                  <TableColumn>来源</TableColumn>
+                  <TableColumn>匹配方式</TableColumn>
                   <TableColumn>状态</TableColumn>
-                  <TableColumn>最后使用</TableColumn>
+                  <TableColumn>学习来源</TableColumn>
                   <TableColumn>操作</TableColumn>
                 </TableHeader>
                 <TableBody>
@@ -1062,51 +1165,248 @@ export default function MemoryManagementPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <SourceChip source={memory.source} />
+                        <MatchTypeChip
+                          matchType={
+                            memory.metadata?.learningSource?.originalMatchType
+                          }
+                        />
                       </TableCell>
                       <TableCell>
                         <StatusChip status={memory.status} />
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 text-xs">
-                          <p>
-                            {new Date(
-                              memory.metadata.usageStats.lastUsedAt ||
-                                memory.lastConfirmedAt
-                            ).toLocaleDateString()}
-                          </p>
+                          {memory.metadata?.learningSource ? (
+                            <div className="space-y-1">
+                              {/* 任务名称和文件名 - 支持点击跳转 */}
+                              <div>
+                                {(() => {
+                                  // 从populate的任务数据中获取信息
+                                  const sourceTask =
+                                    memory.metadata.learningSource.sourceTask
+                                      ?.taskId
+                                  const relatedTask =
+                                    memory.relatedRecords?.[0]?.taskId
+                                  const taskData = sourceTask || relatedTask
+
+                                  if (
+                                    taskData &&
+                                    typeof taskData === "object"
+                                  ) {
+                                    // 任务数据已经被populate
+                                    const taskName =
+                                      taskData.originalFilename ||
+                                      memory.metadata.learningSource.sourceTask
+                                        ?.fileName ||
+                                      "未知任务"
+                                    const taskId =
+                                      taskData._id ||
+                                      (typeof sourceTask === "string"
+                                        ? sourceTask
+                                        : typeof relatedTask === "string"
+                                          ? relatedTask
+                                          : "")
+                                    const taskIdentifier = taskData.createdAt
+                                      ? generateTaskIdentifier(
+                                          taskData.createdAt,
+                                          taskId
+                                        )
+                                      : ""
+
+                                    return (
+                                      <button
+                                        onClick={() => {
+                                          // 构建包含高亮参数的URL
+                                          const highlightParams =
+                                            new URLSearchParams({
+                                              taskId: taskId,
+                                              taskName: taskName,
+                                              taskIdentifier: taskIdentifier,
+                                              // 用于高亮的参数
+                                              highlightProduct:
+                                                memory.confirmedProductId._id,
+                                              highlightProductName:
+                                                memory.confirmedProductId.name,
+                                              highlightWholesaleName:
+                                                memory.originalWholesaleName,
+                                              autoScroll: "true",
+                                              highlightMemory: "true",
+                                            })
+                                          const url = `/dashboard/matching/results?${highlightParams.toString()}`
+                                          window.open(url, "_blank")
+                                        }}
+                                        className="cursor-pointer text-left font-medium text-primary hover:text-primary-600 hover:underline"
+                                        title={`点击跳转到任务: ${taskName} (${taskIdentifier})`}
+                                      >
+                                        {taskName}
+                                        {taskIdentifier && (
+                                          <span className="ml-1 text-xs text-default-400">
+                                            ({taskIdentifier})
+                                          </span>
+                                        )}
+                                      </button>
+                                    )
+                                  } else {
+                                    // 回退到存储的字符串信息
+                                    const taskName =
+                                      memory.metadata.learningSource.sourceTask
+                                        ?.taskName ||
+                                      memory.metadata.learningSource.sourceTask
+                                        ?.fileName ||
+                                      "手动添加"
+                                    return (
+                                      <span className="font-medium text-default-700">
+                                        {taskName}
+                                      </span>
+                                    )
+                                  }
+                                })()}
+                              </div>
+
+                              {/* 学习时间 */}
+                              <p className="text-default-500">
+                                {new Date(
+                                  memory.metadata.learningSource.learnedAt
+                                ).toLocaleString("zh-CN", {
+                                  year: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: false,
+                                })}
+                              </p>
+
+                              {/* 学习方式 */}
+                              <p className="text-default-400">
+                                {memory.metadata.learningSource
+                                  .learningMethod === "single_learn"
+                                  ? "单条学习"
+                                  : memory.metadata.learningSource
+                                        .learningMethod === "batch_learn"
+                                    ? "批量学习"
+                                    : memory.metadata.learningSource
+                                          .learningMethod === "bulk_import"
+                                      ? "批量导入"
+                                      : "手动添加"}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-default-500">
+                                {new Date(
+                                  memory.metadata?.usageStats?.lastUsedAt ||
+                                    memory.lastConfirmedAt
+                                ).toLocaleString("zh-CN", {
+                                  year: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: false,
+                                })}
+                              </p>
+                              <p className="text-default-400">传统记忆</p>
+                            </div>
+                          )}
                           <p className="text-default-500">
-                            使用 {memory.metadata.usageStats.totalUsed} 次
+                            使用 {memory.metadata?.usageStats?.totalUsed || 0}{" "}
+                            次
                           </p>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Tooltip content="编辑记忆">
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="light"
-                              color="primary"
-                              onClick={() => handleEditMemory(memory)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </Tooltip>
-                          <Tooltip content="删除记忆">
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="light"
-                              color="danger"
-                              onClick={() => {
-                                setSelectedMemory(memory)
-                                deleteModal.onOpen()
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </Tooltip>
+                          {/* 根据记忆状态显示不同的操作按钮 */}
+                          {memory.status === "deprecated" ? (
+                            // 废弃记忆：智能显示恢复激活和删除
+                            <>
+                              {/* 检查是否存在同名的活跃记忆，决定是否显示恢复按钮 */}
+                              {!hasActiveMemoryWithSameName(memory) ? (
+                                <Tooltip content="恢复激活">
+                                  <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    color="success"
+                                    onClick={() => handleRestoreMemory(memory)}
+                                  >
+                                    <CheckCircle className="h-4 w-4" />
+                                  </Button>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip content="已存在同名活跃记忆，无法直接恢复">
+                                  <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    color="warning"
+                                    onClick={() =>
+                                      handleConflictRestore(memory)
+                                    }
+                                  >
+                                    <AlertTriangle className="h-4 w-4" />
+                                  </Button>
+                                </Tooltip>
+                              )}
+                              <Tooltip content="删除记忆">
+                                <Button
+                                  isIconOnly
+                                  size="sm"
+                                  variant="light"
+                                  color="danger"
+                                  onClick={() => {
+                                    setSelectedMemory(memory)
+                                    deleteModal.onOpen()
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            // 活跃/冲突记忆：显示全部操作
+                            <>
+                              <Tooltip content="编辑参数">
+                                <Button
+                                  isIconOnly
+                                  size="sm"
+                                  variant="light"
+                                  color="primary"
+                                  onClick={() => handleEditMemory(memory)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </Tooltip>
+                              <Tooltip content="重选商品">
+                                <Button
+                                  isIconOnly
+                                  size="sm"
+                                  variant="light"
+                                  color="secondary"
+                                  onClick={() => handleReselectProduct(memory)}
+                                >
+                                  <Package className="h-4 w-4" />
+                                </Button>
+                              </Tooltip>
+                              <Tooltip content="删除记忆">
+                                <Button
+                                  isIconOnly
+                                  size="sm"
+                                  variant="light"
+                                  color="danger"
+                                  onClick={() => {
+                                    setSelectedMemory(memory)
+                                    deleteModal.onOpen()
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </Tooltip>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1213,7 +1513,7 @@ export default function MemoryManagementPage() {
             <>
               <ModalHeader className="flex items-center gap-2">
                 <Edit className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">编辑记忆</h3>
+                <h3 className="text-lg font-semibold">编辑记忆参数</h3>
               </ModalHeader>
               <ModalBody>
                 {selectedMemory && (
@@ -1240,7 +1540,7 @@ export default function MemoryManagementPage() {
                           </div>
                           <div>
                             <p className="mb-1 text-xs text-default-600">
-                              当前匹配商品
+                              匹配商品（不可修改）
                             </p>
                             <p className="font-medium">
                               {selectedMemory.confirmedProductId.name}
@@ -1251,6 +1551,9 @@ export default function MemoryManagementPage() {
                               </span>
                               <span>确认: {selectedMemory.confirmCount}次</span>
                             </div>
+                            <p className="mt-1 text-xs text-warning">
+                              💡 如需更换商品，请使用"重选商品"功能
+                            </p>
                           </div>
                         </div>
                       </CardBody>
@@ -1258,261 +1561,6 @@ export default function MemoryManagementPage() {
 
                     {/* 编辑表单 */}
                     <div className="space-y-6">
-                      {/* 模板选择 */}
-                      <div>
-                        <div className="mb-2 flex items-center gap-2">
-                          <label className="text-sm font-medium">
-                            <Info className="mr-1 inline h-4 w-4" />
-                            商品模板
-                          </label>
-                          <Tooltip content="选择要搜索商品的模板">
-                            <HelpCircle className="h-4 w-4 text-default-400" />
-                          </Tooltip>
-                        </div>
-                        <Select
-                          selectedKeys={
-                            editForm.templateId
-                              ? new Set([editForm.templateId])
-                              : new Set()
-                          }
-                          onSelectionChange={keys => {
-                            setEditForm({
-                              ...editForm,
-                              templateId: Array.from(keys)[0] as string,
-                            })
-                          }}
-                          placeholder="选择模板..."
-                          isRequired
-                          selectionMode="single"
-                        >
-                          {templates
-                            .filter(template => getTemplateId(template))
-                            .map(template => {
-                              const templateId = getTemplateId(template)
-                              const displayText = template.isDefault
-                                ? `${template.name} (默认)`
-                                : template.name
-                              return (
-                                <SelectItem
-                                  key={templateId}
-                                  value={templateId}
-                                  textValue={displayText}
-                                >
-                                  {template.name}
-                                </SelectItem>
-                              )
-                            })}
-                        </Select>
-                        <p className="mt-1 text-xs text-default-500">
-                          必须选择模板才能搜索和选择商品
-                        </p>
-                      </div>
-
-                      {/* 匹配商品选择 */}
-                      <div>
-                        <div className="mb-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium">
-                              <Package className="mr-1 inline h-4 w-4" />
-                              匹配商品
-                            </label>
-                            <Tooltip content="搜索并选择新的匹配商品">
-                              <HelpCircle className="h-4 w-4 text-default-400" />
-                            </Tooltip>
-                          </div>
-                          {editForm.selectedProductId !==
-                            selectedMemory?.confirmedProductId._id && (
-                            <Chip size="sm" color="warning" variant="flat">
-                              🔄 将要更改
-                            </Chip>
-                          )}
-                        </div>
-
-                        {/* 当前商品信息 */}
-                        <Card className="mb-3 border border-default-200">
-                          <CardBody className="py-2">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-xs text-default-600">
-                                  当前匹配商品
-                                </p>
-                                <p className="font-medium">
-                                  {selectedMemory?.confirmedProductId.name}
-                                </p>
-                                <p className="text-xs text-default-500">
-                                  {selectedMemory?.confirmedProductId.brand} |
-                                  确认 {selectedMemory?.confirmCount} 次
-                                </p>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="flat"
-                                color="primary"
-                                onClick={() => {
-                                  setEditForm({
-                                    ...editForm,
-                                    selectedProductId:
-                                      selectedMemory?.confirmedProductId._id ||
-                                      "",
-                                  })
-                                  setProductSearchTerm("")
-                                  setSearchResults([])
-                                }}
-                              >
-                                保持当前
-                              </Button>
-                            </div>
-                          </CardBody>
-                        </Card>
-
-                        <Autocomplete
-                          placeholder="输入商品名称、品牌或条码，系统将自动搜索..."
-                          value={productSearchTerm}
-                          onInputChange={value => {
-                            setProductSearchTerm(value)
-                            debouncedSearchProducts(value)
-                          }}
-                          onSelectionChange={key => {
-                            if (key) {
-                              // 检查选择的商品是否已被匹配
-                              const selectedProduct = searchResults.find(
-                                p => p._id === key
-                              )
-                              const isCurrentProduct =
-                                key === selectedMemory?.confirmedProductId._id
-                              const isMatched =
-                                selectedProduct?.isMatched && !isCurrentProduct
-
-                              if (isMatched) {
-                                notifications.warning(
-                                  "商品已被匹配",
-                                  "该商品已被其他批发名匹配，无法重复选择"
-                                )
-                                return
-                              }
-
-                              setEditForm({
-                                ...editForm,
-                                selectedProductId: key as string,
-                              })
-                            }
-                          }}
-                          selectedKey={editForm.selectedProductId}
-                          isLoading={isSearching}
-                          variant="bordered"
-                          classNames={{
-                            listbox: "max-h-60 overflow-auto",
-                          }}
-                          description={
-                            isSearching
-                              ? "正在搜索商品..."
-                              : searchResults.length > 0
-                                ? (() => {
-                                    const matchedCount = searchResults.filter(
-                                      p =>
-                                        p.isMatched &&
-                                        p._id !==
-                                          selectedMemory?.confirmedProductId._id
-                                    ).length
-                                    const availableCount =
-                                      searchResults.length - matchedCount
-                                    return `找到 ${searchResults.length} 个商品${matchedCount > 0 ? `，其中 ${matchedCount} 个已被匹配，${availableCount} 个可选择` : ""}`
-                                  })()
-                                : productSearchTerm &&
-                                    searchResults.length === 0
-                                  ? "未找到匹配的商品"
-                                  : "输入关键词开始搜索"
-                          }
-                        >
-                          {searchResults.map(product => {
-                            const isCurrentProduct =
-                              product._id ===
-                              selectedMemory?.confirmedProductId._id
-                            const isMatched =
-                              product.isMatched && !isCurrentProduct
-
-                            console.log(`🎯 渲染商品 ${product.name}:`, {
-                              productId: product._id,
-                              isMatched: product.isMatched,
-                              isCurrentProduct,
-                              finalIsMatched: isMatched,
-                              selectedMemoryProductId:
-                                selectedMemory?.confirmedProductId._id,
-                            })
-
-                            return (
-                              <AutocompleteItem
-                                key={product._id}
-                                value={product._id}
-                                textValue={product.name}
-                                isDisabled={isMatched}
-                                className={isMatched ? "opacity-60" : ""}
-                              >
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <p
-                                      className={`font-medium ${isMatched ? "text-default-400" : ""}`}
-                                    >
-                                      {product.name}
-                                    </p>
-                                    <div className="flex items-center gap-1">
-                                      {isCurrentProduct && (
-                                        <Chip
-                                          size="sm"
-                                          color="success"
-                                          variant="flat"
-                                        >
-                                          当前
-                                        </Chip>
-                                      )}
-                                      {isMatched && (
-                                        <Chip
-                                          size="sm"
-                                          color="danger"
-                                          variant="flat"
-                                        >
-                                          已匹配
-                                        </Chip>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div
-                                    className={`flex items-center gap-2 text-xs ${isMatched ? "text-default-300" : "text-default-500"}`}
-                                  >
-                                    <span>品牌: {product.brand}</span>
-                                    {product.category && (
-                                      <span>• 分类: {product.category}</span>
-                                    )}
-                                    {product.specifications?.price && (
-                                      <span>
-                                        • ¥{product.specifications.price}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {(product.productCode || product.boxCode) && (
-                                    <div
-                                      className={`flex items-center gap-2 font-mono text-xs ${isMatched ? "text-default-200" : "text-default-400"}`}
-                                    >
-                                      {product.productCode && (
-                                        <span>条码: {product.productCode}</span>
-                                      )}
-                                      {product.boxCode && (
-                                        <span>盒码: {product.boxCode}</span>
-                                      )}
-                                    </div>
-                                  )}
-                                  {isMatched && (
-                                    <div className="text-xs text-danger-500">
-                                      ⚠️ 此商品已被其他批发名匹配，无法重复选择
-                                    </div>
-                                  )}
-                                </div>
-                              </AutocompleteItem>
-                            )
-                          })}
-                        </Autocomplete>
-                      </div>
-
                       {/* 置信度 */}
                       <div>
                         <div className="mb-2 flex items-center justify-between">
@@ -1687,7 +1735,11 @@ export default function MemoryManagementPage() {
                           </Tooltip>
                         </div>
                         <Select
-                          selectedKeys={new Set([editForm.status])}
+                          selectedKeys={
+                            editForm.status
+                              ? new Set([editForm.status])
+                              : new Set()
+                          }
                           onSelectionChange={keys =>
                             setEditForm({
                               ...editForm,
@@ -1716,9 +1768,7 @@ export default function MemoryManagementPage() {
                     (editForm.confidence !== selectedMemory.confidence ||
                       editForm.weight !==
                         Number(selectedMemory.weight.toFixed(1)) ||
-                      editForm.status !== selectedMemory.status ||
-                      editForm.selectedProductId !==
-                        selectedMemory.confirmedProductId._id) ? (
+                      editForm.status !== selectedMemory.status) ? (
                       <Edit className="h-4 w-4" />
                     ) : (
                       <Check className="h-4 w-4" />
@@ -1729,9 +1779,7 @@ export default function MemoryManagementPage() {
                   (editForm.confidence !== selectedMemory.confidence ||
                     editForm.weight !==
                       Number(selectedMemory.weight.toFixed(1)) ||
-                    editForm.status !== selectedMemory.status ||
-                    editForm.selectedProductId !==
-                      selectedMemory.confirmedProductId._id)
+                    editForm.status !== selectedMemory.status)
                     ? "保存更改"
                     : "确认无更改"}
                 </Button>
@@ -1788,6 +1836,504 @@ export default function MemoryManagementPage() {
                 <Button color="danger" onPress={clearAllMemories}>
                   确认清空
                 </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* 重选商品模态框 - 参考enhanced-page样式 */}
+      <Modal
+        isOpen={reselectProductModal.isOpen}
+        onOpenChange={reselectProductModal.onOpenChange}
+        size="5xl"
+        scrollBehavior="inside"
+        classNames={{
+          base: "max-h-[90vh] h-[90vh]",
+          body: "p-0 flex flex-col h-full",
+        }}
+      >
+        <ModalContent className="flex h-full flex-col">
+          {onClose => (
+            <>
+              <ModalHeader className="flex-shrink-0 border-b border-divider px-6 py-4">
+                <div className="flex w-full items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-secondary" />
+                    <h3 className="text-xl font-bold">重选匹配商品</h3>
+                  </div>
+                </div>
+              </ModalHeader>
+              <div className="flex min-h-0 flex-1">
+                {/* 左侧：当前记忆信息 */}
+                <div className="w-80 flex-shrink-0 overflow-y-auto border-r border-divider bg-default-50/50">
+                  <div className="space-y-4 p-4">
+                    <h4 className="font-semibold text-default-700">
+                      记忆匹配信息
+                    </h4>
+
+                    {/* 批发名信息 */}
+                    {selectedMemory && (
+                      <Card className="border border-secondary-200 bg-secondary-50">
+                        <CardBody className="p-4">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Badge color="secondary" variant="flat">
+                                批发名
+                              </Badge>
+                              <span className="text-sm font-medium text-secondary-800">
+                                需要重新匹配
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-lg font-bold text-secondary-900">
+                                {selectedMemory.originalWholesaleName}
+                              </p>
+                              <p className="mt-1 text-xs text-secondary-600">
+                                标准化: {selectedMemory.normalizedWholesaleName}
+                              </p>
+                              <div className="mt-2 flex items-center gap-3">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm text-secondary-700">
+                                    确认次数：
+                                  </span>
+                                  <Chip
+                                    color="secondary"
+                                    size="sm"
+                                    variant="solid"
+                                  >
+                                    {selectedMemory.confirmCount} 次
+                                  </Chip>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex items-center gap-3">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm text-secondary-700">
+                                    置信度：
+                                  </span>
+                                  <Chip
+                                    color="secondary"
+                                    size="sm"
+                                    variant="flat"
+                                  >
+                                    {selectedMemory.confidence}%
+                                  </Chip>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardBody>
+                      </Card>
+                    )}
+
+                    {/* 匹配关系指示箭头 */}
+                    {selectedMemory && (
+                      <div className="flex justify-center">
+                        <div className="flex items-center gap-2 rounded-full bg-default-100 px-3 py-2">
+                          <ArrowRight className="h-4 w-4 text-default-500" />
+                          <span className="text-xs font-medium text-default-600">
+                            重新匹配
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 当前匹配商品信息 */}
+                    {selectedMemory && (
+                      <Card className="border border-warning-200 bg-warning-50">
+                        <CardBody className="p-4">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Badge color="warning" variant="flat">
+                                当前匹配
+                              </Badge>
+                              <span className="text-sm font-medium text-warning-800">
+                                即将更换
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-lg font-bold text-warning-900">
+                                {selectedMemory.confirmedProductId.name}
+                              </p>
+                              <p className="mt-1 text-sm text-warning-600">
+                                品牌：{selectedMemory.confirmedProductId.brand}
+                              </p>
+                              <div className="mt-2 flex items-center gap-3">
+                                <Chip color="warning" size="sm" variant="solid">
+                                  权重 {selectedMemory.weight}
+                                </Chip>
+                                <Chip color="warning" size="sm" variant="flat">
+                                  {selectedMemory.status === "active"
+                                    ? "活跃"
+                                    : selectedMemory.status}
+                                </Chip>
+                              </div>
+                              {/* 产品编码信息 */}
+                              {(selectedMemory.confirmedProductId.productCode ||
+                                selectedMemory.confirmedProductId.boxCode) && (
+                                <div className="mt-2 space-y-1 text-xs text-warning-600">
+                                  {selectedMemory.confirmedProductId
+                                    .productCode && (
+                                    <p>
+                                      条码:{" "}
+                                      {
+                                        selectedMemory.confirmedProductId
+                                          .productCode
+                                      }
+                                    </p>
+                                  )}
+                                  {selectedMemory.confirmedProductId
+                                    .boxCode && (
+                                    <p>
+                                      盒码:{" "}
+                                      {
+                                        selectedMemory.confirmedProductId
+                                          .boxCode
+                                      }
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </CardBody>
+                      </Card>
+                    )}
+
+                    {/* 搜索结果统计 */}
+                    {searchResults.length > 0 && (
+                      <div className="rounded-lg bg-default-100 p-3">
+                        <p className="mb-2 text-sm font-medium text-default-700">
+                          搜索结果统计
+                        </p>
+                        {(() => {
+                          const matchedProducts = searchResults.filter(
+                            p =>
+                              p.isMatched &&
+                              p._id !== selectedMemory?.confirmedProductId._id
+                          )
+                          const availableCount =
+                            searchResults.length - matchedProducts.length
+                          const currentProduct = searchResults.filter(
+                            p =>
+                              p._id === selectedMemory?.confirmedProductId._id
+                          )
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-xs">
+                                <span>总计：</span>
+                                <span className="font-medium">
+                                  {searchResults.length} 个
+                                </span>
+                              </div>
+                              {currentProduct.length > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span>当前商品：</span>
+                                  <span className="font-medium text-warning">
+                                    {currentProduct.length} 个
+                                  </span>
+                                </div>
+                              )}
+                              {matchedProducts.length > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span>已匹配：</span>
+                                  <span className="font-medium text-danger">
+                                    {matchedProducts.length} 个
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex justify-between text-xs">
+                                <span>可选择：</span>
+                                <span className="font-medium text-success">
+                                  {availableCount - currentProduct.length} 个
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 右侧：商品搜索和列表 */}
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {/* 搜索框 */}
+                  <div className="flex-shrink-0 border-b border-divider p-4">
+                    <Input
+                      ref={input => {
+                        if (input && reselectProductModal.isOpen) {
+                          setTimeout(() => input.focus(), 100)
+                        }
+                      }}
+                      placeholder="输入商品名称、品牌、条码或盒码进行搜索..."
+                      value={productSearchTerm}
+                      onChange={e => {
+                        const value = e.target.value
+                        setProductSearchTerm(value)
+                        debouncedSearchProducts(value)
+                      }}
+                      variant="bordered"
+                      size="lg"
+                      startContent={
+                        <Search className="h-4 w-4 text-default-400" />
+                      }
+                      description="支持商品名称、品牌、条码、盒码搜索"
+                      classNames={{
+                        input: "text-sm",
+                        description: "text-xs text-default-400",
+                      }}
+                    />
+                  </div>
+
+                  {/* 商品列表 */}
+                  <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                    {isSearching ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="text-center">
+                          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+                          <p className="text-default-500">搜索商品中...</p>
+                        </div>
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="flex items-center justify-center py-12">
+                        <EmptyState
+                          icon={<Package className="h-12 w-12" />}
+                          title={
+                            productSearchTerm ? "没有找到商品" : "请输入搜索词"
+                          }
+                          description={
+                            productSearchTerm
+                              ? "请调整搜索条件重试"
+                              : "在上方搜索框中输入商品名称、品牌、条码或盒码进行搜索"
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {searchResults.map(product => {
+                          const isCurrentProduct =
+                            product._id ===
+                            selectedMemory?.confirmedProductId._id
+                          const isMatched =
+                            product.isMatched && !isCurrentProduct
+
+                          return (
+                            <Card
+                              key={product._id}
+                              isPressable={!isMatched}
+                              className={`min-w-0 transition-all duration-200 ${
+                                isCurrentProduct
+                                  ? "border-warning-200 bg-warning-50"
+                                  : isMatched
+                                    ? "cursor-not-allowed border-default-200 bg-default-50 opacity-60"
+                                    : "hover:border-primary-200 hover:bg-primary-50 hover:shadow-md"
+                              }`}
+                              onPress={() => {
+                                if (isCurrentProduct) {
+                                  notifications.info(
+                                    "相同商品",
+                                    "您选择的是当前已匹配的商品"
+                                  )
+                                } else if (isMatched) {
+                                  notifications.warning(
+                                    "商品已被匹配",
+                                    "该商品已被其他批发名匹配，无法重复选择"
+                                  )
+                                } else {
+                                  updateProductSelection(product._id)
+                                }
+                              }}
+                            >
+                              <CardBody className="min-w-0 p-3">
+                                <div className="min-w-0 space-y-2">
+                                  {/* 顶部标签行 */}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1">
+                                      {product.features?.hasPop && (
+                                        <Chip
+                                          size="sm"
+                                          color="success"
+                                          variant="flat"
+                                        >
+                                          爆珠
+                                        </Chip>
+                                      )}
+                                      {isCurrentProduct && (
+                                        <Chip
+                                          size="sm"
+                                          color="warning"
+                                          variant="flat"
+                                        >
+                                          当前
+                                        </Chip>
+                                      )}
+                                      {isMatched && (
+                                        <Chip
+                                          size="sm"
+                                          color="danger"
+                                          variant="flat"
+                                        >
+                                          已匹配
+                                        </Chip>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* 商品名称 */}
+                                  <h4
+                                    className={`line-clamp-2 text-sm font-semibold leading-tight ${
+                                      isMatched
+                                        ? "text-default-400"
+                                        : isCurrentProduct
+                                          ? "text-warning-900"
+                                          : "text-default-900"
+                                    }`}
+                                  >
+                                    {product.name}
+                                  </h4>
+
+                                  {/* 基本信息网格 */}
+                                  <div
+                                    className={`grid grid-cols-2 gap-2 text-xs ${
+                                      isMatched
+                                        ? "text-default-300"
+                                        : isCurrentProduct
+                                          ? "text-warning-600"
+                                          : "text-default-600"
+                                    }`}
+                                  >
+                                    <div>
+                                      <span className="text-default-400">
+                                        品牌
+                                      </span>
+                                      <p className="truncate font-medium">
+                                        {product.brand}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <span className="text-default-400">
+                                        类型
+                                      </span>
+                                      <p className="truncate font-medium">
+                                        {product.productType || "-"}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* 价格 */}
+                                  <div
+                                    className={`rounded-lg py-2 text-center ${
+                                      isMatched
+                                        ? "bg-default-100 text-default-400"
+                                        : isCurrentProduct
+                                          ? "bg-warning-100 text-warning-700"
+                                          : "bg-primary-50 text-primary-700"
+                                    }`}
+                                  >
+                                    <span className="text-sm font-bold">
+                                      ¥
+                                      {product.pricing?.companyPrice ||
+                                        product.pricing?.retailPrice ||
+                                        0}
+                                    </span>
+                                  </div>
+
+                                  {/* 条码信息（紧凑显示） */}
+                                  {(product.productCode || product.boxCode) && (
+                                    <div
+                                      className={`space-y-1 text-xs ${
+                                        isMatched
+                                          ? "text-default-300"
+                                          : isCurrentProduct
+                                            ? "text-warning-500"
+                                            : "text-default-500"
+                                      }`}
+                                    >
+                                      {product.productCode && (
+                                        <div className="flex justify-between">
+                                          <span>条码:</span>
+                                          <span className="font-mono text-xs">
+                                            {product.productCode.slice(-8)}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {product.boxCode && (
+                                        <div className="flex justify-between">
+                                          <span>盒码:</span>
+                                          <span className="font-mono text-xs">
+                                            {product.boxCode.slice(-8)}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* 选择按钮 */}
+                                  <Button
+                                    size="sm"
+                                    color={
+                                      isCurrentProduct
+                                        ? "warning"
+                                        : isMatched
+                                          ? "default"
+                                          : "primary"
+                                    }
+                                    variant={
+                                      isCurrentProduct
+                                        ? "flat"
+                                        : isMatched
+                                          ? "flat"
+                                          : "solid"
+                                    }
+                                    className="w-full"
+                                    isDisabled={isMatched}
+                                    startContent={
+                                      isCurrentProduct ? (
+                                        <Clock className="h-3 w-3" />
+                                      ) : isMatched ? (
+                                        <X className="h-3 w-3" />
+                                      ) : (
+                                        <CheckCircle className="h-3 w-3" />
+                                      )
+                                    }
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      if (isCurrentProduct) {
+                                        notifications.info(
+                                          "相同商品",
+                                          "您选择的是当前已匹配的商品"
+                                        )
+                                      } else if (!isMatched) {
+                                        updateProductSelection(product._id)
+                                      }
+                                    }}
+                                  >
+                                    {isCurrentProduct
+                                      ? "当前商品"
+                                      : isMatched
+                                        ? "已匹配"
+                                        : "选择此商品"}
+                                  </Button>
+                                </div>
+                              </CardBody>
+                            </Card>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <ModalFooter className="flex-shrink-0 border-t border-divider px-6 py-4">
+                <div className="flex w-full items-center justify-between">
+                  <p className="text-sm text-default-500">
+                    💡 提示：选择新商品后将立即更新记忆库匹配关系
+                  </p>
+                  <Button color="danger" variant="flat" onPress={onClose}>
+                    取消
+                  </Button>
+                </div>
               </ModalFooter>
             </>
           )}

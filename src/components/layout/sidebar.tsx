@@ -165,6 +165,7 @@ export function Sidebar({ className }: SidebarProps) {
           size="sm"
           onPress={toggleSidebar}
           className="text-default-500"
+          aria-label={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
         >
           {sidebarCollapsed ? (
             <ChevronRight className="h-4 w-4" />
@@ -218,6 +219,7 @@ export function Sidebar({ className }: SidebarProps) {
               startContent={
                 !sidebarCollapsed ? <User className="h-4 w-4" /> : undefined
               }
+              aria-label="个人设置"
             >
               {sidebarCollapsed ? <User className="h-4 w-4" /> : "设置"}
             </Button>
@@ -240,6 +242,7 @@ export function Sidebar({ className }: SidebarProps) {
               startContent={
                 !sidebarCollapsed ? <LogOut className="h-4 w-4" /> : undefined
               }
+              aria-label="退出登录"
             >
               {sidebarCollapsed ? <LogOut className="h-4 w-4" /> : "退出"}
             </Button>

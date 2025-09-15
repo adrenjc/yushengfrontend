@@ -116,7 +116,7 @@ export function Header({ title, className }: HeaderProps) {
       <NavbarContent justify="end">
         {/* 搜索按钮 (移动端) */}
         <NavbarItem className="sm:hidden">
-          <Button isIconOnly variant="light" size="sm">
+          <Button isIconOnly variant="light" size="sm" aria-label="搜索">
             <Search className="h-4 w-4" />
           </Button>
         </NavbarItem>
@@ -125,7 +125,12 @@ export function Header({ title, className }: HeaderProps) {
         <NavbarItem>
           <Dropdown placement="bottom-end">
             <DropdownTrigger>
-              <Button isIconOnly variant="light" size="sm">
+              <Button
+                isIconOnly
+                variant="light"
+                size="sm"
+                aria-label="主题切换"
+              >
                 {theme === "light" ? (
                   <Sun className="h-4 w-4" />
                 ) : theme === "dark" ? (
@@ -165,7 +170,12 @@ export function Header({ title, className }: HeaderProps) {
         <NavbarItem>
           <Dropdown placement="bottom-end">
             <DropdownTrigger>
-              <Button isIconOnly variant="light" size="sm">
+              <Button
+                isIconOnly
+                variant="light"
+                size="sm"
+                aria-label="通知中心"
+              >
                 <Badge
                   content={unreadNotifications.length || ""}
                   color="danger"

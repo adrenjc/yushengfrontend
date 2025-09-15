@@ -550,6 +550,7 @@ export function FileUpload({
                       variant="light"
                       size="sm"
                       onClick={() => removeFile(uploadFile.id)}
+                      aria-label="移除文件"
                     >
                       <X className="h-4 w-4" />
                     </Button>

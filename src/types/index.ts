@@ -41,6 +41,9 @@ export interface Product {
   _id: string
   name: string
   brand: string
+  company?: string
+  productCode?: string
+  boxCode?: string
   keywords: string[]
   category: string
   specifications: ProductSpecifications
@@ -282,6 +285,110 @@ export interface TableProps<T = any> {
     onSelectionChange: (keys: Set<string>) => void
   }
   onRowAction?: (action: string, record: T) => void
+}
+
+/* 记忆库相关类型 */
+export interface MatchingMemory {
+  _id: string
+  normalizedWholesaleName: string
+  originalWholesaleName: string
+  confirmedProductId: Product
+  templateId: string
+  confidence: number
+  source: "manual" | "expert" | "imported" | "migrated"
+  confirmCount: number
+  confirmedBy: string
+  weight: number
+  isUserPreference: boolean
+  relatedRecords: Array<{
+    recordId: string
+    taskId:
+      | string
+      | {
+          _id: string
+          originalFilename: string
+          templateName: string
+          createdAt: string
+          status: string
+        }
+    timestamp: string
+    _id: string
+  }>
+  features: {
+    extractedSpecs: string[]
+    keywords: string[]
+  }
+  status: "active" | "deprecated" | "conflicted"
+  trustScore: number
+  isHighTrust: boolean
+  metadata: {
+    learningSource: {
+      sourceTask: {
+        taskId:
+          | string
+          | {
+              _id: string
+              originalFilename: string
+              templateName: string
+              createdAt: string
+              status: string
+            }
+        taskName: string
+        taskIdentifier: string
+        fileName: string
+      }
+      learnedAt: string
+      learnedBy: string
+      learningMethod:
+        | "single_learn"
+        | "batch_learn"
+        | "bulk_import"
+        | "manual_add"
+      learningNote: string
+      originalMatchType: "auto" | "memory" | "manual" | "unknown"
+      originalRecord: {
+        recordId: string
+        rowNumber: number
+        originalPrice: number
+        originalQuantity: number
+      }
+    }
+    usageStats: {
+      totalUsed: number
+      successRate: number
+      lastUsedAt: string
+      recentUsage: Array<{
+        usedAt: string
+        taskId: string
+        userId: string
+        matchedRecordId: string
+        _id: string
+      }>
+    }
+    qualityControl: {
+      expertVerified: boolean
+      verifiedBy?: string
+      verifiedAt?: string
+      qualityScore: number
+      qualityNotes: string
+    }
+    auditTrail: Array<{
+      action: string
+      performedBy: string
+      performedAt: string
+      details: string
+      _id: string
+    }>
+    conflicts: Array<{
+      conflictingProductId: string
+      conflictReason: string
+      reportedAt: string
+    }>
+  }
+  lastConfirmedAt: string
+  createdAt: string
+  updatedAt: string
+  __v: number
 }
 
 /* 主题相关类型 */
