@@ -711,6 +711,7 @@ function EnhancedMatchingResultsContent() {
   const [availableProducts, setAvailableProducts] = useState<any[]>([])
   const [productSearchTerm, setProductSearchTerm] = useState("")
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
 
   // 防抖搜索定时器
   const productSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -1948,6 +1949,7 @@ function EnhancedMatchingResultsContent() {
         setAvailableProducts([])
       } finally {
         setLoadingProducts(false)
+        setIsSearching(false)
       }
     },
     [taskInfo, results, notifications]
@@ -1955,6 +1957,12 @@ function EnhancedMatchingResultsContent() {
 
   // 刷新商品匹配状态
   const refreshProductMatchStatus = useCallback(() => {
+    // 如果正在搜索，跳过自动刷新，避免覆盖搜索结果
+    if (isSearching) {
+      console.log("🔍 正在搜索中，跳过商品匹配状态刷新")
+      return
+    }
+
     if (availableProducts.length > 0) {
       // 重新计算每个商品的匹配状态
       const updatedProducts = availableProducts.map((product: any) => {
@@ -1973,7 +1981,7 @@ function EnhancedMatchingResultsContent() {
 
       setAvailableProducts(updatedProducts)
     }
-  }, [availableProducts, results])
+  }, [availableProducts, results, isSearching])
 
   // 监听results变化，自动刷新商品匹配状态
   useEffect(() => {
@@ -1996,11 +2004,13 @@ function EnhancedMatchingResultsContent() {
         console.log("🧹 搜索词为空，清空商品列表")
         setAvailableProducts([])
         setLoadingProducts(false)
+        setIsSearching(false)
         return
       }
 
       // 显示搜索状态
       setLoadingProducts(true)
+      setIsSearching(true)
 
       // 设置新的定时器 - 800ms防抖延迟
       productSearchTimeoutRef.current = setTimeout(() => {
@@ -2027,6 +2037,7 @@ function EnhancedMatchingResultsContent() {
     setProductSearchTerm("")
     setAvailableProducts([]) // 清空商品列表
     setLoadingProducts(false) // 重置加载状态
+    setIsSearching(false) // 重置搜索状态
 
     // 强制调用防抖搜索函数清空结果
     debouncedProductSearch("")
@@ -2158,6 +2169,7 @@ function EnhancedMatchingResultsContent() {
             setProductSearchTerm("")
             setAvailableProducts([])
             setLoadingProducts(false)
+            setIsSearching(false)
 
             // 强制调用防抖搜索函数清空结果
             debouncedProductSearch("")
@@ -3784,6 +3796,7 @@ function EnhancedMatchingResultsContent() {
             setProductSearchTerm("")
             setAvailableProducts([])
             setLoadingProducts(false)
+            setIsSearching(false)
 
             // 清除防抖定时器
             if (productSearchTimeoutRef.current) {
